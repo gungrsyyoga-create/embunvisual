@@ -241,6 +241,11 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
         .nav-links a:hover::after { width: 100%; }
         .navbar.scrolled .nav-links a:hover { color: var(--gold); }
         
+        /* Language Toggle Special Styling for scrolled state */
+        .navbar.scrolled .lang-toggle a.active { color: var(--gold) !important; }
+        .navbar.scrolled .lang-toggle a.inactive { color: var(--text-main) !important; }
+        .navbar.scrolled .lang-toggle span { color: var(--border) !important; }
+
         .btn-nav { 
             background: transparent; border: 1px solid #fff; color: #fff !important; 
             padding: 12px 30px; font-size: 0.8rem; letter-spacing: 1px;
@@ -598,10 +603,10 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <a href="#katalog"><?= $txt['nav_katalog'] ?></a>
             <a href="#custom"><?= $txt['nav_custom'] ?></a>
             <a href="https://wa.me/6281234567890" target="_blank" class="btn-nav"><?= $txt['nav_contact'] ?></a>
-            <div style="display:flex; gap: 8px; align-items:center; margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 20px;">
-                <a href="?lang=id" style="color: <?= $lang == 'id' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'id' ? '600' : '300' ?>;">ID</a>
+            <div class="lang-toggle" style="display:flex; gap: 8px; align-items:center; margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 20px;">
+                <a href="?lang=id" class="<?= $lang == 'id' ? 'active' : 'inactive' ?>" style="color: <?= $lang == 'id' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'id' ? '600' : '300' ?>; letter-spacing: 1px;">ID</a>
                 <span style="color: rgba(255,255,255,0.4); font-size:0.8rem;">|</span>
-                <a href="?lang=en" style="color: <?= $lang == 'en' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'en' ? '600' : '300' ?>;">EN</a>
+                <a href="?lang=en" class="<?= $lang == 'en' ? 'active' : 'inactive' ?>" style="color: <?= $lang == 'en' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'en' ? '600' : '300' ?>; letter-spacing: 1px;">EN</a>
             </div>
         </div>
     </nav>

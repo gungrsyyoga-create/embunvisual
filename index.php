@@ -22,8 +22,8 @@ $i18n = [
         'nav_custom' => 'Bespoke Design',
         'nav_contact' => 'Hubungi Kami',
         'hero_badge' => 'Digital Undangan Mewah',
-        'hero_title' => 'Merayakan Cinta<br>dengan Keanggunan',
-        'hero_desc' => 'Kami merancang undangan pernikahan digital premium, menceritakan kisah cinta Anda dengan elegan, praktis, serta memberikan impresi mewah yang tak terlupakan.',
+        'hero_title' => 'Momen Berharga<br>dengan Keanggunan',
+        'hero_desc' => 'Kami merancang undangan digital premium untuk berbagai momen berharga Anda, menceritakan kisah Anda dengan elegan, praktis, serta memberikan impresi mewah yang tak terlupakan.',
         'hero_btn' => 'Eksplorasi Koleksi',
         'cat_title' => 'Koleksi Premium',
         'cat_desc' => 'Temukan pilihan tema berkelas dari kami yang dirancang dengan detail sempurna, harmoni warna, dan tipografi estetis.',
@@ -36,8 +36,8 @@ $i18n = [
         'gal_source' => 'Sumber Foto:',
         'gal_empty' => 'Koleksi foto sedang kami siapkan untuk Anda.',
         'cus_title' => 'Bespoke Service',
-        'cus_desc' => 'Ingin konsep yang lebih personal? Tim desain kami siap berkolaborasi untuk merancang dari nol undangan digital eksklusif yang merefleksikan karakter dan tema impian hari bahagiamu.',
-        'cus_ph_name' => 'Nama Pasangan (Cth: Romeo & Juliet)',
+        'cus_desc' => 'Ingin konsep yang lebih personal? Tim desain kami siap berkolaborasi untuk merancang dari nol undangan digital eksklusif yang merefleksikan karakter dan tema impian acara spesialmu.',
+        'cus_ph_name' => 'Nama Pasangan / Penyelenggara',
         'cus_ph_wa' => 'Nomor WhatsApp (Aktif)',
         'cus_ph_budget' => 'Estimasi Budget Eksklusif',
         'cus_opt_more' => 'Lebih dari Rp 1.000.000',
@@ -57,7 +57,7 @@ $i18n = [
         'footer_copy' => '&copy; 2024 Embun Visual. Seluruh Hak Cipta Dilindungi.',
         'mod_title' => 'Reservasi',
         'mod_sub' => 'Tema Terpilih:',
-        'mod_ph_name' => 'Nama Pasangan Pengantin',
+        'mod_ph_name' => 'Nama Pasangan / Penyelenggara',
         'mod_ph_wa' => 'Nomor WhatsApp',
         'mod_agree' => 'Saya telah membaca & menyetujui seluruh <a href="#" onclick="showTermsPopup(event)" style="color: var(--primary); text-decoration: underline;">Syarat & Ketentuan Layanan</a> Embun Visual.',
         'mod_btn' => 'Lanjut ke Eksekusi'
@@ -67,8 +67,8 @@ $i18n = [
         'nav_custom' => 'Bespoke Design',
         'nav_contact' => 'Contact Us',
         'hero_badge' => 'Luxury Digital Invitations',
-        'hero_title' => 'Celebrating Love<br>with Elegance',
-        'hero_desc' => 'We design premium digital wedding invitations, narrating your love story with elegance and practicality, leaving an unforgettable luxurious impression.',
+        'hero_title' => 'Precious Moments<br>with Elegance',
+        'hero_desc' => 'We design premium digital invitations for your special events, narrating your story with elegance and practicality, leaving an unforgettable luxurious impression.',
         'hero_btn' => 'Explore Collection',
         'cat_title' => 'Premium Collection',
         'cat_desc' => 'Discover our classy theme options designed with perfect detailing, color harmony, and aesthetic typography.',
@@ -81,8 +81,8 @@ $i18n = [
         'gal_source' => 'Photo Source:',
         'gal_empty' => 'We are preparing the photo collection for you.',
         'cus_title' => 'Bespoke Service',
-        'cus_desc' => 'Looking for a more personal concept? Our design team is ready to collaborate to design an exclusive digital invitation from scratch that reflects your character and dream wedding theme.',
-        'cus_ph_name' => 'Couple\'s Name (Ex: Romeo & Juliet)',
+        'cus_desc' => 'Looking for a more personal concept? Our design team is ready to collaborate to design an exclusive digital invitation from scratch that reflects your character and dream event theme.',
+        'cus_ph_name' => 'Couple\'s / Host\'s Name',
         'cus_ph_wa' => 'Active WhatsApp Number',
         'cus_ph_budget' => 'Exclusive Budget Estimation',
         'cus_opt_more' => 'More than Rp 1.000.000',
@@ -102,7 +102,7 @@ $i18n = [
         'footer_copy' => '&copy; 2024 Embun Visual. All Rights Reserved.',
         'mod_title' => 'Reservation',
         'mod_sub' => 'Selected Theme:',
-        'mod_ph_name' => 'Bride & Groom Name',
+        'mod_ph_name' => 'Couple\'s / Host\'s Name',
         'mod_ph_wa' => 'WhatsApp Number',
         'mod_agree' => 'I have read & agree to all Embun Visual <a href="#" onclick="showTermsPopup(event)" style="color: var(--primary); text-decoration: underline;">Terms & Conditions of Service</a>.',
         'mod_btn' => 'Proceed to Execution'
@@ -151,7 +151,7 @@ if(isset($_POST['submit_custom'])){
     mysqli_query($conn, "INSERT INTO request_custom (nama_klien, no_whatsapp, budget_estimasi, deskripsi_konsep) VALUES ('$nama', '$wa', '$budget', '$konsep')");
     
     $nomor_admin = "6281234567890"; // GANTI DENGAN NOMOR WA KAMU
-    $pesan_wa = "Halo *Embun Visual*!%0A%0ASaya ingin diskusi pembuatan *Tema Custom* khusus untuk pernikahan saya.%0A*Nama:* $nama%0A*Estimasi Budget:* $budget%0A*Konsep:* $konsep%0A%0AApakah bisa dibantu?";
+    $pesan_wa = "Halo *Embun Visual*!%0A%0ASaya ingin diskusi pembuatan *Tema Custom* khusus untuk acara saya.%0A*Nama:* $nama%0A*Estimasi Budget:* $budget%0A*Konsep:* $konsep%0A%0AApakah bisa dibantu?";
     
     echo "<script>window.open('https://api.whatsapp.com/send?phone=$nomor_admin&text=$pesan_wa', '_blank'); window.location.href='index.php?status=custom_success';</script>";
     exit;
@@ -166,7 +166,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Embun Visual | Premium Digital Wedding Invitation</title>
+    <title>Embun Visual | Premium Digital Invitation</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -264,7 +264,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             height: 100vh; min-height: 700px;
             display: flex; align-items: center; justify-content: center; text-align: center; 
             background: linear-gradient(to bottom, rgba(18, 20, 19, 0.4), rgba(18, 20, 19, 0.7)), 
-                        url('https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1920&q=80') center/cover fixed; 
+                        url('https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1920&q=80') center/cover fixed; 
             padding: 0 20px; position: relative; 
         }
         .hero-content { position: relative; z-index: 2; max-width: 900px; padding-top: 60px; }
@@ -390,7 +390,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             overflow: hidden; border: 1px solid rgba(229, 226, 220, 0.7);
         }
         .custom-img {
-            flex: 1; background: url('https://images.unsplash.com/photo-1520854221256-17451cc331bf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80') center/cover;
+            flex: 1; background: url('https://images.unsplash.com/photo-1577717903315-1691ae25ab3f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80') center/cover;
             position: relative;
         }
         .custom-form-wrapper { 

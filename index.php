@@ -3,7 +3,113 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+session_start();
 include 'config.php'; 
+
+// ==========================================
+// 0. SISTEM MULTI-BAHASA (LOCALIZATION)
+// ==========================================
+if(isset($_GET['lang'])) {
+    if($_GET['lang'] == 'en' || $_GET['lang'] == 'id') {
+        $_SESSION['lang'] = $_GET['lang'];
+    }
+}
+$lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'id';
+
+$i18n = [
+    'id' => [
+        'nav_katalog' => 'Koleksi Tema',
+        'nav_custom' => 'Bespoke Design',
+        'nav_contact' => 'Hubungi Kami',
+        'hero_badge' => 'Digital Undangan Mewah',
+        'hero_title' => 'Merayakan Cinta<br>dengan Keanggunan',
+        'hero_desc' => 'Kami merancang undangan pernikahan digital premium, menceritakan kisah cinta Anda dengan elegan, praktis, serta memberikan impresi mewah yang tak terlupakan.',
+        'hero_btn' => 'Eksplorasi Koleksi',
+        'cat_title' => 'Koleksi Premium',
+        'cat_desc' => 'Temukan pilihan tema berkelas dari kami yang dirancang dengan detail sempurna, harmoni warna, dan tipografi estetis.',
+        'cat_btn_demo' => 'Lihat Demo',
+        'cat_btn_book' => 'Booking',
+        'cat_empty' => 'Koleksi Belum Memiliki Tema',
+        'cat_empty_desc' => 'Silakan login ke panel admin untuk menambahkan tema baru.',
+        'gal_title' => 'Gallery PhotoShoot',
+        'gal_desc' => 'Kumpulan memori indah yang diabadikan dengan sempurna melalui karya Partner Teduh Visual.',
+        'gal_source' => 'Sumber Foto:',
+        'gal_empty' => 'Koleksi foto sedang kami siapkan untuk Anda.',
+        'cus_title' => 'Bespoke Service',
+        'cus_desc' => 'Ingin konsep yang lebih personal? Tim desain kami siap berkolaborasi untuk merancang dari nol undangan digital eksklusif yang merefleksikan karakter dan tema impian hari bahagiamu.',
+        'cus_ph_name' => 'Nama Pasangan (Cth: Romeo & Juliet)',
+        'cus_ph_wa' => 'Nomor WhatsApp (Aktif)',
+        'cus_ph_budget' => 'Estimasi Budget Eksklusif',
+        'cus_opt_more' => 'Lebih dari Rp 1.000.000',
+        'cus_ph_concept' => 'Ceritakan detail konsep yang diinginkan (warna, nuansa, mood)...',
+        'cus_btn' => 'Kirim Permintaan',
+        'faq_title' => 'Pertanyaan & Ketentuan',
+        'faq_desc' => 'Informasi yang sering ditanyakan seputar layanan undangan digital Embun Visual serta syarat dan ketentuan layanan kami.',
+        'faq_q1' => '1. Berapa lama proses pengerjaan undangan digital?',
+        'faq_a1' => 'Untuk tema yang sudah tersedia di katalog (Koleksi Tema), proses pengerjaan memakan waktu <strong>1-3 hari kerja</strong>... Sedangkan untuk layanan <em>Bespoke Design</em> (Custom), waktu pengerjaan berkisar antara <strong>7-14 hari kerja</strong>.',
+        'faq_q2' => '2. Apakah saya bisa merevisi data jika ada kesalahan?',
+        'faq_a2' => 'Ya, tentu bisa. Kami memberikan batasan <strong>revisi minor sebanyak 3 kali</strong> sebelum hari H acara.',
+        'faq_q3' => '3. Berapa lama masa aktif link undangan web?',
+        'faq_a3' => 'Undangan web Anda akan tetap aktif dan dapat diakses publik hingga <strong>6 bulan setelah tanggal acara (Hari H)</strong> berlalu.',
+        'faq_q4' => '4. Syarat dan Ketentuan Layanan (Terms & Conditions)',
+        'faq_a4' => 'Dengan menggunakan layanan Embun Visual, Anda menyetujui pelunasan 100% sebelum pengerjaan final, menjamin foto bebas hak cipta, dan setuju untuk dimasukkan ke portfolio kecuali via NDA.',
+        'footer_desc' => 'Membingkai cerita Anda menjadi mahakarya digital abadi, dirancang dengan presisi dan sentuhan keanggunan.',
+        'footer_copy' => '&copy; 2024 Embun Visual. Seluruh Hak Cipta Dilindungi.',
+        'mod_title' => 'Reservasi',
+        'mod_sub' => 'Tema Terpilih:',
+        'mod_ph_name' => 'Nama Pasangan Pengantin',
+        'mod_ph_wa' => 'Nomor WhatsApp',
+        'mod_agree' => 'Saya telah membaca & menyetujui seluruh <a href="#" onclick="showTermsPopup(event)" style="color: var(--primary); text-decoration: underline;">Syarat & Ketentuan Layanan</a> Embun Visual.',
+        'mod_btn' => 'Lanjut ke Eksekusi'
+    ],
+    'en' => [
+        'nav_katalog' => 'Theme Collection',
+        'nav_custom' => 'Bespoke Design',
+        'nav_contact' => 'Contact Us',
+        'hero_badge' => 'Luxury Digital Invitations',
+        'hero_title' => 'Celebrating Love<br>with Elegance',
+        'hero_desc' => 'We design premium digital wedding invitations, narrating your love story with elegance and practicality, leaving an unforgettable luxurious impression.',
+        'hero_btn' => 'Explore Collection',
+        'cat_title' => 'Premium Collection',
+        'cat_desc' => 'Discover our classy theme options designed with perfect detailing, color harmony, and aesthetic typography.',
+        'cat_btn_demo' => 'View Demo',
+        'cat_btn_book' => 'Book Now',
+        'cat_empty' => 'No Themes Available Yet',
+        'cat_empty_desc' => 'Please log in to the admin panel to add a new theme.',
+        'gal_title' => 'PhotoShoot Gallery',
+        'gal_desc' => 'A collection of beautiful memories perfectly captured by our partner Teduh Visual.',
+        'gal_source' => 'Photo Source:',
+        'gal_empty' => 'We are preparing the photo collection for you.',
+        'cus_title' => 'Bespoke Service',
+        'cus_desc' => 'Looking for a more personal concept? Our design team is ready to collaborate to design an exclusive digital invitation from scratch that reflects your character and dream wedding theme.',
+        'cus_ph_name' => 'Couple\'s Name (Ex: Romeo & Juliet)',
+        'cus_ph_wa' => 'Active WhatsApp Number',
+        'cus_ph_budget' => 'Exclusive Budget Estimation',
+        'cus_opt_more' => 'More than Rp 1.000.000',
+        'cus_ph_concept' => 'Tell us the details of your desired concept (colors, vibes, mood)...',
+        'cus_btn' => 'Send Request',
+        'faq_title' => 'FAQ & Terms',
+        'faq_desc' => 'Frequently asked questions regarding Embun Visual digital invitation services and our terms and conditions.',
+        'faq_q1' => '1. How long does the digital invitation creation process take?',
+        'faq_a1' => 'For themes already available in the catalog, processing takes <strong>1-3 working days</strong>... For <em>Bespoke Design</em> (Custom), processing takes about <strong>7-14 working days</strong>.',
+        'faq_q2' => '2. Can I revise data if there\'s a mistake?',
+        'faq_a2' => 'Yes, absolutely. We provide a limit of <strong>3 minor revisions</strong> before the event day.',
+        'faq_q3' => '3. How long is the web invitation link active?',
+        'faq_a3' => 'Your web invitation will remain active and publicly accessible for up to <strong>6 months after the event date (D-Day)</strong>.',
+        'faq_q4' => '4. Terms and Conditions of Service',
+        'faq_a4' => 'By using Embun Visual services, you agree to 100% completion payment before final delivery, guarantee copyright-free photos, and agree to be included in our portfolio unless agreed otherwise via NDA.',
+        'footer_desc' => 'Framing your story into a timeless digital masterpiece, designed with precision and a touch of elegance.',
+        'footer_copy' => '&copy; 2024 Embun Visual. All Rights Reserved.',
+        'mod_title' => 'Reservation',
+        'mod_sub' => 'Selected Theme:',
+        'mod_ph_name' => 'Bride & Groom Name',
+        'mod_ph_wa' => 'WhatsApp Number',
+        'mod_agree' => 'I have read & agree to all Embun Visual <a href="#" onclick="showTermsPopup(event)" style="color: var(--primary); text-decoration: underline;">Terms & Conditions of Service</a>.',
+        'mod_btn' => 'Proceed to Execution'
+    ]
+];
+$txt = $i18n[$lang];
+
 
 // ==========================================
 // 1. PROSES FORM BOOKING (Diarahkan ke Checkout)
@@ -489,25 +595,30 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
     <nav class="navbar" id="navbar">
         <a href="#" class="nav-brand serif">Embun Visual</a>
         <div class="nav-links">
-            <a href="#katalog">Koleksi Tema</a>
-            <a href="#custom">Bespoke Design</a>
-            <a href="https://wa.me/6281234567890" target="_blank" class="btn-nav">Hubungi Kami</a>
+            <a href="#katalog"><?= $txt['nav_katalog'] ?></a>
+            <a href="#custom"><?= $txt['nav_custom'] ?></a>
+            <a href="https://wa.me/6281234567890" target="_blank" class="btn-nav"><?= $txt['nav_contact'] ?></a>
+            <div style="display:flex; gap: 8px; align-items:center; margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 20px;">
+                <a href="?lang=id" style="color: <?= $lang == 'id' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'id' ? '600' : '300' ?>;">ID</a>
+                <span style="color: rgba(255,255,255,0.4); font-size:0.8rem;">|</span>
+                <a href="?lang=en" style="color: <?= $lang == 'en' ? 'var(--gold)' : '#fff' ?>; font-weight: <?= $lang == 'en' ? '600' : '300' ?>;">EN</a>
+            </div>
         </div>
     </nav>
 
     <section class="hero">
         <div class="hero-content" data-aos="fade-up" data-aos-duration="1400">
-            <span class="badge-hero">Digital Undangan Mewah</span>
-            <h1 class="serif">Merayakan Cinta<br>dengan Keanggunan</h1>
-            <p>Kami merancang undangan pernikahan digital premium, menceritakan kisah cinta Anda dengan elegan, praktis, serta memberikan impresi mewah yang tak terlupakan.</p>
-            <a href="#katalog" class="btn-hero">Eksplorasi Koleksi</a>
+            <span class="badge-hero"><?= $txt['hero_badge'] ?></span>
+            <h1 class="serif"><?= $txt['hero_title'] ?></h1>
+            <p><?= $txt['hero_desc'] ?></p>
+            <a href="#katalog" class="btn-hero"><?= $txt['hero_btn'] ?></a>
         </div>
     </section>
 
     <section class="section" id="katalog">
         <div class="sec-header" data-aos="fade-up">
-            <h2 class="sec-title serif">Koleksi Premium</h2>
-            <p class="sec-desc">Temukan pilihan tema berkelas dari kami yang dirancang dengan detail sempurna, harmoni warna, dan tipografi estetis.</p>
+            <h2 class="sec-title serif"><?= $txt['cat_title'] ?></h2>
+            <p class="sec-desc"><?= $txt['cat_desc'] ?></p>
         </div>
         
         <div class="grid">
@@ -527,8 +638,8 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                     <p class="c-desc"><?php echo $tema['deskripsi']; ?></p>
                     
                     <div class="c-actions">
-                        <a href="<?php echo htmlspecialchars(trim($tema['slug_demo'])); ?>" target="_blank" class="btn-outline">Lihat Demo</a>
-                        <button onclick="bukaModal('<?php echo $tema['id']; ?>', '<?php echo htmlspecialchars($tema['nama_tema'], ENT_QUOTES); ?>', '<?php echo $tema['harga']; ?>')" class="btn-solid">Booking</button>
+                        <a href="<?php echo htmlspecialchars(trim($tema['slug_demo'])); ?>" target="_blank" class="btn-outline"><?= $txt['cat_btn_demo'] ?></a>
+                        <button onclick="bukaModal('<?php echo $tema['id']; ?>', '<?php echo htmlspecialchars($tema['nama_tema'], ENT_QUOTES); ?>', '<?php echo $tema['harga']; ?>')" class="btn-solid"><?= $txt['cat_btn_book'] ?></button>
                     </div>
                 </div>
             </div>
@@ -536,7 +647,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                 $delay += 100; 
                 } 
             } else {
-                echo "<div style='grid-column: 1/-1; text-align:center; padding:80px 20px; background:#fff; border:1px solid #E5E2DC;' data-aos='fade-up'><h3 class='serif' style='font-size:2rem; color:var(--primary); margin-bottom:10px;'>Koleksi Belum Memiliki Tema</h3><p style='color:#737373; font-weight:300;'>Silakan login ke panel admin untuk menambahkan tema baru.</p></div>";
+                echo "<div style='grid-column: 1/-1; text-align:center; padding:80px 20px; background:#fff; border:1px solid #E5E2DC;' data-aos='fade-up'><h3 class='serif' style='font-size:2rem; color:var(--primary); margin-bottom:10px;'>{$txt['cat_empty']}</h3><p style='color:#737373; font-weight:300;'>{$txt['cat_empty_desc']}</p></div>";
             }
             ?>
         </div>
@@ -545,8 +656,8 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
     <!-- Galeri Momen Dinamis -->
     <section id="galeri" class="section" style="background-color: var(--surface);">
         <div class="sec-header" data-aos="fade-up">
-            <h2 class="sec-title serif">Gallry PhotoShoot</h2>
-            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya Patner Teduh Visual.</p>
+            <h2 class="sec-title serif"><?= $txt['gal_title'] ?></h2>
+            <p class="sec-desc"><?= $txt['gal_desc'] ?></p>
         </div>
         
         <div class="gallery-grid" data-aos="fade-up" data-aos-delay="100">
@@ -562,7 +673,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                     <?php if(!empty($g['caption'])) { echo "<div style='margin-bottom:5px; font-weight:500;'>".htmlspecialchars($g['caption'])."</div>"; } ?>
                     <?php if(!empty($g['sumber_nama'])) { ?>
                         <div style="font-size:0.75rem; color:rgba(255,255,255,0.7);">
-                            Sumber Foto: 
+                            <?= $txt['gal_source'] ?> 
                             <?php if(!empty($g['sumber_link'])) { ?>
                                 <a href="<?php echo htmlspecialchars($g['sumber_link']); ?>" target="_blank" style="color:var(--gold); text-decoration:none; transition:0.3s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--gold)'"><?php echo htmlspecialchars($g['sumber_nama']); ?></a>
                             <?php } else { ?>
@@ -576,7 +687,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <?php 
                 } 
             } else {
-                echo "<p style='grid-column: 1/-1; text-align:center; color: var(--text-muted);'>Koleksi foto sedang kami siapkan untuk Anda.</p>";
+                echo "<p style='grid-column: 1/-1; text-align:center; color: var(--text-muted);'>{$txt['gal_empty']}</p>";
             }
             ?>
         </div>
@@ -587,20 +698,20 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <div class="custom-img" data-aos="fade-in" data-aos-duration="1500"></div>
             
             <div class="custom-form-wrapper" data-aos="fade-left" data-aos-duration="1200">
-                <h2 class="serif">Bespoke Service</h2>
-                <p>Ingin konsep yang lebih personal? Tim desain kami siap berkolaborasi untuk merancang dari nol undangan digital eksklusif yang merefleksikan karakter dan tema impian hari bahagiamu.</p>
+                <h2 class="serif"><?= $txt['cus_title'] ?></h2>
+                <p><?= $txt['cus_desc'] ?></p>
                 
                 <form method="POST" class="custom-form">
-                    <input type="text" name="nama_custom" placeholder="Nama Pasangan (Cth: Romeo & Juliet)" required>
-                    <input type="number" name="wa_custom" placeholder="Nomor WhatsApp (Aktif)" required>
+                    <input type="text" name="nama_custom" placeholder="<?= $txt['cus_ph_name'] ?>" required>
+                    <input type="number" name="wa_custom" placeholder="<?= $txt['cus_ph_wa'] ?>" required>
                     <select name="budget" required>
-                        <option value="" disabled selected>Estimasi Budget Eksklusif</option>
+                        <option value="" disabled selected><?= $txt['cus_ph_budget'] ?></option>
                         <option value="Rp 300.000 - Rp 500.000">Rp 300.000 - Rp 500.000</option>
                         <option value="Rp 500.000 - Rp 1.000.000">Rp 500.000 - Rp 1.000.000</option>
-                        <option value="> Rp 1.000.000">Lebih dari Rp 1.000.000</option>
+                        <option value="> Rp 1.000.000"><?= $txt['cus_opt_more'] ?></option>
                     </select>
-                    <textarea name="konsep" rows="3" placeholder="Ceritakan detail konsep yang diinginkan (warna, nuansa, mood)..." required></textarea>
-                    <button type="submit" name="submit_custom" class="btn-custom">Kirim Permintaan</button>
+                    <textarea name="konsep" rows="3" placeholder="<?= $txt['cus_ph_concept'] ?>" required></textarea>
+                    <button type="submit" name="submit_custom" class="btn-custom"><?= $txt['cus_btn'] ?></button>
                 </form>
             </div>
         </div>
@@ -609,20 +720,20 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
     <!-- FAQ & Ketentuan Layanan -->
     <section class="section faq-section" id="faq">
         <div class="sec-header" data-aos="fade-up">
-            <h2 class="sec-title serif">Pertanyaan & Ketentuan</h2>
-            <p class="sec-desc">Informasi yang sering ditanyakan seputar layanan undangan digital Embun Visual serta syarat dan ketentuan layanan kami.</p>
+            <h2 class="sec-title serif"><?= $txt['faq_title'] ?></h2>
+            <p class="sec-desc"><?= $txt['faq_desc'] ?></p>
         </div>
 
         <div class="faq-container" data-aos="fade-up" data-aos-delay="100">
             <!-- Item 1 -->
             <div class="accordion-item">
                 <button class="accordion-header">
-                    <span>1. Berapa lama proses pengerjaan undangan digital?</span>
+                    <span><?= $txt['faq_q1'] ?></span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
                 <div class="accordion-content">
                     <div class="accordion-body">
-                        Untuk tema yang sudah tersedia di katalog (Koleksi Tema), proses pengerjaan memakan waktu <strong>1-3 hari kerja</strong> terhitung sejak semua data dan foto dari klien kami terima secara lengkap. Sedangkan untuk layanan <em>Bespoke Design</em> (Custom), waktu pengerjaan berkisar antara <strong>7-14 hari kerja</strong> tergantung pada tingkat kerumitan desain.
+                        <?= $txt['faq_a1'] ?>
                     </div>
                 </div>
             </div>
@@ -630,12 +741,12 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <!-- Item 2 -->
             <div class="accordion-item">
                 <button class="accordion-header">
-                    <span>2. Apakah saya bisa merevisi data jika ada kesalahan?</span>
+                    <span><?= $txt['faq_q2'] ?></span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
                 <div class="accordion-content">
                     <div class="accordion-body">
-                        Ya, tentu bisa. Kami memberikan batasan <strong>revisi minor sebanyak 3 kali</strong> (seperti penggantian teks, typo nama, atau ganti foto) sebelum hari H acara. Namun, penggantian total tema atau struktur susunan acara yang fundamental akan dikenakan biaya tambahan.
+                        <?= $txt['faq_a2'] ?>
                     </div>
                 </div>
             </div>
@@ -643,12 +754,12 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <!-- Item 3 -->
             <div class="accordion-item">
                 <button class="accordion-header">
-                    <span>3. Berapa lama masa aktif link undangan web?</span>
+                    <span><?= $txt['faq_q3'] ?></span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
                 <div class="accordion-content">
                     <div class="accordion-body">
-                        Undangan web Anda akan tetap aktif dan dapat diakses publik hingga <strong>6 bulan setelah tanggal acara (Hari H)</strong> berlalu. Lewat dari masa tersebut, sistem kami akan secara otomatis menghapus database undangan beserta data kehadiran tamu (RSVP) dari server.
+                        <?= $txt['faq_a3'] ?>
                     </div>
                 </div>
             </div>
@@ -656,18 +767,12 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             <!-- Item 4 -->
             <div class="accordion-item">
                 <button class="accordion-header">
-                    <span>4. Syarat dan Ketentuan Layanan (Terms & Conditions)</span>
+                    <span><?= $txt['faq_q4'] ?></span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
                 <div class="accordion-content">
                     <div class="accordion-body">
-                        Dengan menggunakan layanan Embun Visual, Anda menyetujui poin-poin berikut:
-                        <ul>
-                            <li>Pembayaran harus dilunasi 100% sebelum tim kami memulai proses pengerjaan final, atau minimal DP 50% untuk menahan slot pengerjaan.</li>
-                            <li>Foto dan video profil yang diberikan kepada kami harus menjadi hak milik klien atau sudah mendapat izin penggunaan (Membeli lisensi / Non-copyright infringement). Kami tidak bertanggung jawab atas tuntutan hak cipta dari pihak ketiga.</li>
-                            <li>Data RSVP tamu dijaga privasinya oleh sistem kami dan tidak akan dijual ke pihak manapun. Namun, klien bertanggung jawab jika mendistribusikan link secara publik yang mengakibatkan <i>spam</i> dari tamu yang tak diundang.</li>
-                            <li>Embun Visual berhak menggunakan <i>screenshot</i> undangan yang telah selesai sebagai portofolio publikasi kami kecuali klien meminta perjanjian <i>Non-Disclosure Agreement (NDA)</i> secara tertulis.</li>
-                        </ul>
+                        <?= $txt['faq_a4'] ?>
                     </div>
                 </div>
             </div>
@@ -676,28 +781,28 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
 
     <footer data-aos="fade-in" data-aos-duration="1400">
         <div class="f-brand">Embun Visual</div>
-        <p class="f-text">Membingkai cerita Anda menjadi mahakarya digital abadi, dirancang dengan presisi dan sentuhan keanggunan.</p>
+        <p class="f-text"><?= $txt['footer_desc'] ?></p>
         <div class="social-links">
             <a href="#"><i class="fab fa-instagram"></i></a>
             <a href="#"><i class="fab fa-pinterest-p"></i></a>
             <a href="#"><i class="fab fa-tiktok"></i></a>
         </div>
-        <p class="copyright">&copy; 2024 Embun Visual. Seluruh Hak Cipta Dilindungi.</p>
+        <p class="copyright"><?= $txt['footer_copy'] ?></p>
     </footer>
 
     <div class="modal" id="modalBooking">
         <div class="modal-content">
             <span class="close-modal" onclick="tutupModal()">&times;</span>
-            <h3 class="modal-title serif">Reservasi</h3>
-            <p class="modal-subtitle">Tema Terpilih: <br><strong id="judulTema"></strong></p>
+            <h3 class="modal-title serif"><?= $txt['mod_title'] ?></h3>
+            <p class="modal-subtitle"><?= $txt['mod_sub'] ?> <br><strong id="judulTema"></strong></p>
             
             <form method="POST">
                 <input type="hidden" name="tema_id" id="temaIdInput">
                 <div class="form-group">
-                    <input type="text" name="nama" class="form-control" placeholder="Nama Pasangan Pengantin" required>
+                    <input type="text" name="nama" class="form-control" placeholder="<?= $txt['mod_ph_name'] ?>" required>
                 </div>
                 <div class="form-group">
-                    <input type="number" name="whatsapp" class="form-control" placeholder="Nomor WhatsApp" required>
+                    <input type="number" name="whatsapp" class="form-control" placeholder="<?= $txt['mod_ph_wa'] ?>" required>
                 </div>
                 <div class="form-group">
                     <input type="date" name="tanggal_acara" class="form-control" required style="color: #A0A0A0;" onfocus="this.style.color='#1A1A1A'">
@@ -705,10 +810,10 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                 <div class="form-group" style="display: flex; align-items: flex-start; gap: 10px; margin-top: 20px;">
                     <input type="checkbox" id="agreeTerms" name="agree_terms" required style="margin-top: 5px; cursor: pointer;">
                     <label for="agreeTerms" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; cursor: pointer;">
-                        Saya telah membaca & menyetujui seluruh <a href="#" onclick="showTermsPopup(event)" style="color: var(--primary); text-decoration: underline;">Syarat & Ketentuan Layanan</a> Embun Visual.
+                        <?= $txt['mod_agree'] ?>
                     </label>
                 </div>
-                <button type="submit" name="submit_booking" class="btn-modal">Lanjut ke Eksekusi <i class="fas fa-arrow-right" style="margin-left: 10px;"></i></button>
+                <button type="submit" name="submit_booking" class="btn-modal"><?= $txt['mod_btn'] ?> <i class="fas fa-arrow-right" style="margin-left: 10px;"></i></button>
             </form>
         </div>
     </div>

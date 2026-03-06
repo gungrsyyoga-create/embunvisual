@@ -185,6 +185,22 @@ $jml_menunggu = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml 
 $badge_notif = ($jml_menunggu > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_menunggu</span>" : "";
 
 $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
+
+// 3B. TABEL KINERJA ADMIN (HANYA UNTUK SUPER ADMIN)
+$kinerja_admin = [];
+if($current_role == 'Super Admin') {
+    $q_kinerja = mysqli_query($conn, "
+        SELECT a.username, a.role,
+               (SELECT COUNT(id) FROM pesanan WHERE admin_id = a.id) as total_tugas,
+               (SELECT SUM(total_tagihan) FROM pesanan WHERE admin_id = a.id AND status_pembayaran='Lunas') as total_pendapatan
+        FROM admin_users a
+    ");
+    while($row = mysqli_fetch_assoc($q_kinerja)) {
+        // Jika hasil SUM NULL, set ke 0
+        if(is_null($row['total_pendapatan'])) $row['total_pendapatan'] = 0;
+        $kinerja_admin[] = $row;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -277,16 +293,16 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
         <?php if($menu == 'dashboard') { ?>
         <div class="page-header" data-aos="fade-down">
             <h1 class="page-title">Ikhtisar Bisnis</h1>
-            <p style="color: var(--muted);">Selamat datang kembali, pantau performa Embun Visual hari ini.</p>
+            <p style="color: var(--muted);">Selamat datang kembali <b><?= htmlspecialchars($current_admin) ?></b>, pantau performa Embun Visual hari ini.</p>
         </div>
 
         <div class="grid-stats">
             <div class="stat-card" data-aos="fade-up" data-aos-delay="100">
-                <div class="stat-title">Total Pesanan</div>
-                <div class="stat-value"><?= number_format($total_pesanan) ?></div>
+                <div class="stat-title"><?= ($current_role == 'Super Admin') ? 'Total Pesanan (Global)' : 'Total Pesanan Anda' ?></div>
+                <div class="stat-value"><?= number_format($total_pesanan) ?> <i class="fas fa-shopping-bag" style="font-size:1rem; color:var(--muted);"></i></div>
             </div>
             <div class="stat-card" data-aos="fade-up" data-aos-delay="200">
-                <div class="stat-title">Total Pendapatan (Lunas)</div>
+                <div class="stat-title"><?= ($current_role == 'Super Admin') ? 'Total Pendapatan (Global)' : 'Total Pendapatan Anda' ?></div>
                 <div class="stat-value">Rp <?= number_format((float)$total_pendapatan,0,',','.') ?></div>
             </div>
             <div class="stat-card" data-aos="fade-up" data-aos-delay="300">
@@ -295,14 +311,42 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
             </div>
         </div>
         
+        <?php if($current_role == 'Super Admin') { ?>
         <div class="card" data-aos="fade-up" data-aos-delay="400">
-            <div class="card-header">Panduan Singkat</div>
+            <div class="card-header"><i class="fas fa-chart-line"></i> Laporan Kinerja Staf & Admin</div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama Staf</th>
+                            <th>Hak Akses</th>
+                            <th>Total Klien / Proyek</th>
+                            <th>Pendapatan (Lunas)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($kinerja_admin as $ka) { ?>
+                        <tr>
+                            <td style="font-weight:600;"><i class="fas fa-user-circle" style="color:var(--muted); margin-right:5px;"></i> <?= htmlspecialchars($ka['username']) ?></td>
+                            <td><?= $ka['role'] == 'Super Admin' ? "<span class='badge badge-yellow'>Super Admin</span>" : "<span class='badge badge-blue'>Staff User</span>" ?></td>
+                            <td style="font-weight:600; font-size:1.1rem;"><?= number_format($ka['total_tugas']) ?> Klien</td>
+                            <td style="font-weight:600; color:var(--primary);">Rp <?= number_format($ka['total_pendapatan'],0,',','.') ?></td>
+                        </tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php } else { ?>
+        <div class="card" data-aos="fade-up" data-aos-delay="400">
+            <div class="card-header"><i class="fas fa-info-circle"></i> Panduan Singkat Staff</div>
             <div style="padding: 25px; line-height:1.8; color: var(--muted);">
-                1. Jika ada klien memesan via website, data akan muncul di menu <b>Pesanan Masuk</b>.<br>
-                2. Status <b>Menunggu Konfirmasi</b> artinya klien mengklaim sudah mentransfer dana. Silakan cek mutasi BCA/E-Wallet Anda.<br>
+                1. Anda dapat melihat <b>Klien & Proyek</b> yang telah ditugaskan khusus untuk Anda oleh Super Admin di menu <b>Pesanan Masuk</b>.<br>
+                2. Status <b>Menunggu Konfirmasi</b> artinya klien mengklaim sudah mentransfer dana. Harap cek rekening / mutasi dan validasi pembayaran.<br>
                 3. Jika dana benar masuk, ubah status pembayarannya menjadi <b>Lunas</b>.
             </div>
         </div>
+        <?php } ?>
 
         <?php } elseif($menu == 'pesanan') { ?>
         <div class="page-header" data-aos="fade-down">

@@ -154,6 +154,48 @@ if(isset($_POST['tambah_galeri'])){
     header("Location: admin.php?menu=galeri"); exit;
 }
 
+// E2. Update Galeri Homepage
+if(isset($_POST['update_galeri'])){
+    $id = $_POST['id_galeri'];
+    $caption = mysqli_real_escape_string($conn, $_POST['caption']);
+    $sumber_nama = mysqli_real_escape_string($conn, $_POST['sumber_nama']);
+    $sumber_link = mysqli_real_escape_string($conn, $_POST['sumber_link']);
+    $type = $_POST['tipe_input'];
+    
+    // Jika ada gambar baru dari URL
+    if($type == 'url'){
+        $gambar = mysqli_real_escape_string($conn, trim($_POST['gambar_url']));
+        if(mysqli_query($conn, "UPDATE galeri SET gambar='$gambar', type='url', caption='$caption', sumber_nama='$sumber_nama', sumber_link='$sumber_link' WHERE id='$id'")){
+            $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Data galeri berhasil diperbarui.', 'success');";
+        }
+    } 
+    // Jika ada gambar baru lewat upload file
+    else if($type == 'upload' && !empty($_FILES['gambar_file']['name'])) {
+        $nama_file = $_FILES['gambar_file']['name'];
+        $tmp_file = $_FILES['gambar_file']['tmp_name'];
+        $ext = strtolower(pathinfo($nama_file, PATHINFO_EXTENSION));
+        $allowed = array('jpg','jpeg','png','webp');
+        
+        if(in_array($ext, $allowed)){
+            $new_name = uniqid().'.'.$ext;
+            $upload_path = 'uploads/galeri/'.$new_name;
+            
+            if(move_uploaded_file($tmp_file, $upload_path)){
+                if(mysqli_query($conn, "UPDATE galeri SET gambar='$upload_path', type='upload', caption='$caption', sumber_nama='$sumber_nama', sumber_link='$sumber_link' WHERE id='$id'")){
+                    $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Foto galeri berhasil diperbarui.', 'success');";
+                }
+            }
+        }
+    }
+    // Jika hanya memperbarui teks, tidak ubah foto lama
+    else {
+        if(mysqli_query($conn, "UPDATE galeri SET caption='$caption', sumber_nama='$sumber_nama', sumber_link='$sumber_link' WHERE id='$id'")){
+            $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Keterangan galeri diperbarui.', 'success');";
+        }
+    }
+    header("Location: admin.php?menu=galeri"); exit;
+}
+
 // F. FUNGSI HAPUS DATA
 if(isset($_POST['hapus_data'])){
     $tabel = $_POST['tabel'];
@@ -605,59 +647,79 @@ if($current_role == 'Super Admin') {
             </table>
         </div>
 
-        <?php } elseif($menu == 'galeri') { ?>
+        <?php } elseif($menu == 'galeri') { 
+            // Cek apakah mode Edit aktif
+            $edit_gal_mode = false;
+            $edit_gal_data = [];
+            if(isset($_GET['edit_id'])) {
+                $e_id = (int)$_GET['edit_id'];
+                $q_edit = mysqli_query($conn, "SELECT * FROM galeri WHERE id='$e_id'");
+                if(mysqli_num_rows($q_edit) > 0) {
+                    $edit_gal_mode = true;
+                    $edit_gal_data = mysqli_fetch_assoc($q_edit);
+                }
+            }
+        ?>
         <div class="page-header" data-aos="fade-down">
-            <h1 class="page-title">Galeri Landing Page</h1>
-            <p style="color: var(--muted);">Tambahkan foto kenangan dari perangkat atau tautan eksternal untuk ditampilkan di halaman depan (index.php).</p>
+            <h1 class="page-title">Pengaturan Galeri</h1>
         </div>
 
         <div style="display:flex; gap:30px; align-items: flex-start;">
-            <div class="card" data-aos="fade-right" data-aos-delay="200" style="flex: 1; position: sticky; top: 40px;">
-                <div class="card-header"><i class="fas fa-plus-circle"></i> Tambah Foto Baru</div>
-                <div style="padding: 25px;">
-                    <form method="POST" action="admin.php?menu=galeri" enctype="multipart/form-data">
-                        
-                        <div class="form-group">
-                            <label>Metode Input Gambar</label>
-                            <select name="tipe_input" id="tipe_input" class="form-control" onchange="toggleInputType()">
-                                <option value="url">Link Tautan (URL)</option>
-                                <option value="upload">Upload File Lokal</option>
-                            </select>
+            <div class="card" data-aos="fade-right" data-aos-delay="200" style="flex: 1; position: sticky; top: 40px; <?= $edit_gal_mode ? 'border: 2px solid var(--primary);' : '' ?>">
+                <div class="card-header" <?= $edit_gal_mode ? 'style="background: var(--primary); color: white;"' : '' ?>><i class="fas fa-camera"></i> <?= $edit_gal_mode ? 'Edit Foto' : 'Tambah Foto Baru' ?></div>
+                <form method="POST" action="admin.php?menu=galeri" enctype="multipart/form-data" style="padding: 25px;">
+                    <?php if($edit_gal_mode): ?>
+                        <input type="hidden" name="id_galeri" value="<?= $edit_gal_data['id'] ?>">
+                        <div style="margin-bottom: 15px;">
+                            <img src="<?= $edit_gal_data['gambar'] ?>" style="width:100px; height:70px; object-fit:cover; border-radius:6px; border:1px solid #ccc;">
+                            <p style="font-size:0.8rem; color:var(--muted); margin-top:5px;">Foto saat ini. Biarkan kosong jika tidak ingin mengubah foto.</p>
                         </div>
+                    <?php endif; ?>
 
-                        <div class="form-group" id="input_url">
-                            <label>Tautan Gambar (URL) <span style="color:red">*</span></label>
-                            <input type="text" name="gambar_url" class="form-control" placeholder="https://contoh.com/foto.jpg">
-                            <span class="text-hint">Rekomendasi: Gunakan link Pinterest atau Unsplash untuk menghemat server.</span>
+                    <div class="form-group">
+                        <label>Tipe Input Gambar</label>
+                        <select name="tipe_input" id="tipe_input" class="form-control" onchange="toggleInputType()">
+                            <option value="upload" <?= ($edit_gal_mode && $edit_gal_data['type'] == 'upload') ? 'selected' : '' ?>>Upload File (Maks 2MB)</option>
+                            <option value="url" <?= ($edit_gal_mode && $edit_gal_data['type'] == 'url') ? 'selected' : '' ?>>Gunakan Link (URL)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="input_upload" style="display: <?= (!$edit_gal_mode || ($edit_gal_data['type'] == 'upload')) ? 'block' : 'none' ?>;">
+                        <label>Pilih File (JPG/PNG)</label>
+                        <input type="file" name="gambar_file" class="form-control" accept="image/*" <?= $edit_gal_mode ? '' : 'required' ?>>
+                    </div>
+                    
+                    <div class="form-group" id="input_url" style="display: <?= ($edit_gal_mode && $edit_gal_data['type'] == 'url') ? 'block' : 'none' ?>;">
+                        <label>URL Gambar</label>
+                        <input type="url" name="gambar_url" class="form-control" placeholder="Msl: https://source.unsplash.com/..." value="<?= ($edit_gal_mode && $edit_gal_data['type'] == 'url') ? trim($edit_gal_data['gambar']) : '' ?>">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Caption Pendek (Opsional)</label>
+                        <input type="text" name="caption" class="form-control" placeholder="Msl: Prewedding at Bali" value="<?= $edit_gal_mode ? $edit_gal_data['caption'] : '' ?>">
+                    </div>
+                    
+                    <div style="display:flex; gap:15px;">
+                        <div class="form-group" style="flex:1;">
+                            <label>Nama Fotografer</label>
+                            <input type="text" name="sumber_nama" class="form-control" placeholder="Msl: Teduh Visual" value="<?= $edit_gal_mode ? $edit_gal_data['sumber_nama'] : 'Teduh Visual' ?>">
                         </div>
-
-                        <div class="form-group" id="input_upload" style="display:none;">
-                            <label>Pilih File Foto <span style="color:red">*</span></label>
-                            <input type="file" name="gambar_file" class="form-control" accept="image/png, image/jpeg, image/jpg, image/webp" style="padding-bottom: 35px;">
-                            <span class="text-hint">Format: JPG, PNG, WEBP. Maksimum: 2MB.</span>
+                        <div class="form-group" style="flex:1;">
+                            <label>Link Sosmed Fotografer</label>
+                            <input type="text" name="sumber_link" class="form-control" placeholder="Link Instagram..." value="<?= $edit_gal_mode ? $edit_gal_data['sumber_link'] : 'https://instagram.com/teduh.visual' ?>">
                         </div>
+                    </div>
 
-                        <div class="form-group">
-                            <label>Caption / Judul (Opsional)</label>
-                            <input type="text" name="caption" class="form-control" placeholder="Msl: Momen Pre-wedding di Bali">
+                    <?php if($edit_gal_mode) { ?>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button type="submit" name="update_galeri" class="btn-action btn-primary" style="flex:1; padding:12px; font-size:1rem; justify-content:center;">Simpan Perubahan</button>
+                            <a href="admin.php?menu=galeri" class="btn-action btn-secondary" style="padding:12px; font-size:1rem; justify-content:center;">Batal</a>
                         </div>
-
-                        <div class="form-group" style="display:flex; gap:15px;">
-                            <div style="flex:1;">
-                                <label>Nama Sumber Foto (Opsional)</label>
-                                <input type="text" name="sumber_nama" class="form-control" placeholder="Msl: Teduh Visual">
-                            </div>
-                            <div style="flex:1;">
-                                <label>Link Sumber Foto (Opsional)</label>
-                                <input type="text" name="sumber_link" class="form-control" placeholder="Msl: https://instagram.com/...">
-                            </div>
-                        </div>
-
-                        <button type="submit" name="tambah_galeri" class="btn-action btn-primary" style="width:100%; padding:14px; font-size:1rem; display:flex; justify-content:center; align-items:center; gap:8px;">
-                            <i class="fas fa-upload"></i> Tambahkan ke Galeri
-                        </button>
-                    </form>
-                </div>
+                    <?php } else { ?>
+                        <button type="submit" name="tambah_galeri" class="btn-action btn-primary" style="width:100%; padding:12px; font-size:1rem; display:block; text-align:center;">Tambahkan ke Beranda</button>
+                    <?php } ?>
+                    
+                </form>
             </div>
 
             <div class="card" data-aos="fade-left" data-aos-delay="300" style="flex: 2;">
@@ -710,16 +772,27 @@ if($current_role == 'Super Admin') {
         <script>
         function toggleInputType() {
             var type = document.getElementById('tipe_input').value;
-            if(type === 'url') {
+                if(type === 'url') {
                 document.getElementById('input_url').style.display = 'block';
                 document.getElementById('input_upload').style.display = 'none';
                 document.querySelector('input[name="gambar_url"]').setAttribute('required', 'required');
-                document.querySelector('input[name="gambar_file"]').removeAttribute('required');
+                
+                // Kondisi mode edit jika ganti radio input ke URL maka file input tidak perlu required
+                let fileInput = document.querySelector('input[name="gambar_file"]');
+                if (fileInput) fileInput.removeAttribute('required');
+                
             } else {
                 document.getElementById('input_url').style.display = 'none';
                 document.getElementById('input_upload').style.display = 'block';
-                document.querySelector('input[name="gambar_url"]').removeAttribute('required');
-                document.querySelector('input[name="gambar_file"]').setAttribute('required', 'required');
+                
+                let urlInput = document.querySelector('input[name="gambar_url"]');
+                if (urlInput) urlInput.removeAttribute('required');
+                
+                // Jika sedang tidak edit mode, berikan required pada file
+                let fileInput = document.querySelector('input[name="gambar_file"]');
+                if (fileInput && !document.querySelector('input[name="id_galeri"]')) {
+                    fileInput.setAttribute('required', 'required');
+                }
             }
         }
         </script>

@@ -1,4 +1,8 @@
 <?php 
+// Setting Session Timeout (24 Jam)
+ini_set('session.gc_maxlifetime', 86400);
+session_set_cookie_params(86400);
+
 error_reporting(0);
 session_start();
 include 'config.php'; 
@@ -21,7 +25,11 @@ if(isset($_POST['login'])) {
     }
     
     if(mysqli_num_rows($cek) > 0) {
+        $row_admin = mysqli_fetch_assoc($cek);
         $_SESSION['admin_embun'] = true;
+        $_SESSION['admin_id'] = $row_admin['id'];
+        $_SESSION['admin_username'] = $row_admin['username'];
+        $_SESSION['admin_role'] = $row_admin['role'];
         header("Location: admin.php"); 
         exit;
     } else {
@@ -88,6 +96,17 @@ if(isset($_POST['update_status_pesanan'])){
     }
 }
 
+// A2. Update Assign Admin (Pesanan)
+if(isset($_POST['update_assign'])){
+    $id_pesanan = $_POST['id_pesanan'];
+    $admin_id = $_POST['admin_assign_id']; 
+    if(empty($admin_id)) $admin_id = 'NULL';
+    if(mysqli_query($conn, "UPDATE pesanan SET admin_id=$admin_id WHERE id='$id_pesanan'")){
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Penugasan staff diperbarui.', 'success');";
+    }
+    header("Location: admin.php?menu=pesanan"); exit;
+}
+
 // B. Tambah Katalog Tema Baru
 if(isset($_POST['tambah_tema'])){
     $nama = mysqli_real_escape_string($conn, $_POST['nama']); 
@@ -132,13 +151,24 @@ if(isset($_POST['update_tema'])){
 if(isset($_POST['tambah_admin'])){
     $u = mysqli_real_escape_string($conn, $_POST['username_baru']);
     $p = md5($_POST['password_baru']);
+    $r = mysqli_real_escape_string($conn, $_POST['role_baru']);
     $cek_user = mysqli_query($conn, "SELECT * FROM admin_users WHERE username='$u'");
     if(mysqli_num_rows($cek_user) > 0) {
         $_SESSION['notif_pesan'] = "Swal.fire('Gagal!', 'Username tersebut sudah dipakai.', 'error');";
     } else {
-        if(mysqli_query($conn, "INSERT INTO admin_users (username, password) VALUES ('$u', '$p')")){
+        if(mysqli_query($conn, "INSERT INTO admin_users (username, password, role) VALUES ('$u', '$p', '$r')")){
             $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Admin baru ditambahkan.', 'success');";
         }
+    }
+    header("Location: admin.php?menu=admin"); exit;
+}
+
+// D2. Ubah Password Admin
+if(isset($_POST['ubah_password'])){
+    $id = $_POST['id_admin'];
+    $p = md5($_POST['password_baru']);
+    if(mysqli_query($conn, "UPDATE admin_users SET password='$p' WHERE id='$id'")){
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Password admin berhasil diubah.', 'success');";
     }
     header("Location: admin.php?menu=admin"); exit;
 }
@@ -196,11 +226,17 @@ if(isset($_POST['hapus_data'])){
 // ==========================================
 // 3. AMBIL STATISTIK UNTUK DASHBOARD
 // ==========================================
-$total_pesanan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan"))['jml'];
-$total_pendapatan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(total_tagihan) as total FROM pesanan WHERE status_pembayaran='Lunas'"))['total'];
+$current_admin = isset($_SESSION['admin_username']) ? $_SESSION['admin_username'] : 'admin';
+$current_role  = isset($_SESSION['admin_role']) ? $_SESSION['admin_role'] : 'Super Admin';
+$my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+$adminFilterStat = ($current_role != 'Super Admin') ? "WHERE admin_id='$my_id'" : "";
+$adminFilterStatAnd = ($current_role != 'Super Admin') ? "AND admin_id='$my_id'" : "";
+
+$total_pesanan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan $adminFilterStat"))['jml'];
+$total_pendapatan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(total_tagihan) as total FROM pesanan WHERE status_pembayaran='Lunas' $adminFilterStatAnd"))['total'];
 $total_request = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM request_custom WHERE status_request='Menunggu Review'"))['jml'];
 
-$jml_menunggu = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi'"))['jml'];
+$jml_menunggu = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi' $adminFilterStatAnd"))['jml'];
 $badge_notif = ($jml_menunggu > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_menunggu</span>" : "";
 
 $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
@@ -274,10 +310,15 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
         
         <a href="?menu=dashboard" class="nav-item <?= $menu == 'dashboard' ? 'active' : '' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
         <a href="?menu=pesanan" class="nav-item <?= $menu == 'pesanan' ? 'active' : '' ?>"><i class="fas fa-receipt"></i> Pesanan Masuk <?= $badge_notif ?></a>
+        <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=katalog" class="nav-item <?= $menu == 'katalog' ? 'active' : '' ?>"><i class="fas fa-layer-group"></i> Kelola Katalog</a>
+        <?php } ?>
         <a href="?menu=request" class="nav-item <?= $menu == 'request' ? 'active' : '' ?>"><i class="fas fa-paint-brush"></i> Request Custom</a>
         <a href="?menu=galeri" class="nav-item <?= $menu == 'galeri' ? 'active' : '' ?>"><i class="fas fa-images"></i> Pengaturan Galeri</a>
+        <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=admin" class="nav-item <?= $menu == 'admin' ? 'active' : '' ?>"><i class="fas fa-users-cog"></i> Kelola Admin</a>
+        <?php } ?>
+        <a href="?menu=kalender" class="nav-item <?= $menu == 'kalender' ? 'active' : '' ?>"><i class="fas fa-calendar-alt"></i> Kalender Booking</a>
         <a href="?menu=generator" class="nav-item <?= $menu == 'generator' ? 'active' : '' ?>"><i class="fas fa-magic"></i> Generator Link</a>
         
         <div style="margin-top: auto;">
@@ -344,7 +385,21 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                     </thead>
                     <tbody>
                         <?php 
-                        $q_pesanan = mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id ORDER BY p.id DESC");
+                        $adminFilter = "";
+                        $list_admins = [];
+                        
+                        // Perbaikan: Jika sesi lama masih menyala (admin_username kosong), anggap sebagai super admin
+                        $current_admin = isset($_SESSION['admin_username']) ? $_SESSION['admin_username'] : 'admin';
+                        $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+                        
+                        if($current_admin == 'admin') {
+                            $rads = mysqli_query($conn, "SELECT id, username FROM admin_users");
+                            while($ad = mysqli_fetch_assoc($rads)) { $list_admins[] = $ad; }
+                        } else {
+                            $adminFilter = "WHERE p.admin_id='$my_id'"; 
+                        }
+                        
+                        $q_pesanan = mysqli_query($conn, "SELECT p.*, k.nama_tema, k.slug_demo FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id $adminFilter ORDER BY p.id DESC");
                         while($row = mysqli_fetch_assoc($q_pesanan)) { 
                             $badge = 'badge-yellow'; 
                             if($row['status_pembayaran'] == 'Lunas') $badge = 'badge-green';
@@ -358,26 +413,58 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                                 <a href="https://wa.me/<?= $row['no_whatsapp'] ?>" target="_blank" style="color:#25D366; text-decoration:none; font-size:0.85rem;"><i class="fab fa-whatsapp"></i> <?= $row['no_whatsapp'] ?></a>
                             </td>
                             <td>
-                                <?= $row['nama_tema'] ?><br>
+                                <?php 
+                                    $safeName = str_replace([' ', '&'], ['+', '%26'], $row['nama_pemesan']); 
+                                    $linkUndangan = "";
+                                    if(!empty($row['slug_demo'])){
+                                        $separator = strpos($row['slug_demo'], '?') !== false ? '&' : '?';
+                                        $linkUndangan = trim($row['slug_demo']) . $separator . "to=" . $safeName;
+                                    }
+                                ?>
+                                <?php if($linkUndangan){ ?>
+                                    <a href="<?= $linkUndangan ?>" target="_blank" style="color:#0284c7; text-decoration:none; font-weight:600;"><i class="fas fa-external-link-alt"></i> <?= $row['nama_tema'] ?></a>
+                                <?php } else { ?>
+                                    <b><?= $row['nama_tema'] ?></b>
+                                <?php } ?>
+                                <br>
                                 <span style="font-size:0.8rem; color:var(--muted);">Tgl: <?= date('d M Y', strtotime($row['tanggal_acara'])) ?></span>
                             </td>
                             <td style="font-weight:600;">Rp <?= number_format($row['total_tagihan'],0,',','.') ?></td>
                             <td><span class="badge <?= $badge ?>"><?= $row['status_pembayaran'] ?></span></td>
-                            <td style="display:flex; gap:10px; align-items:center;">
-                                <form method="POST" style="display:flex; gap:5px;">
+                            <td style="display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; gap:10px; align-items:center;">
+                                    <form method="POST" style="display:flex; gap:5px;">
+                                        <input type="hidden" name="id_pesanan" value="<?= $row['id'] ?>">
+                                        <select name="status_bayar" class="form-control" style="padding:6px; width:auto; font-size:0.8rem; margin:0;">
+                                            <option value="Belum Bayar" <?= $row['status_pembayaran']=='Belum Bayar'?'selected':'' ?>>Belum Bayar</option>
+                                            <option value="Menunggu Konfirmasi" <?= $row['status_pembayaran']=='Menunggu Konfirmasi'?'selected':'' ?>>Cek Mutasi</option>
+                                            <option value="Lunas" <?= $row['status_pembayaran']=='Lunas'?'selected':'' ?>>Lunas</option>
+                                        </select>
+                                        <button type="submit" name="update_status_pesanan" class="btn-action btn-primary"><i class="fas fa-check"></i></button>
+                                    </form>
+                                    <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirm('Yakin ingin menghapus pesanan ini?');">
+                                        <input type="hidden" name="tabel" value="pesanan">
+                                        <input type="hidden" name="id_hapus" value="<?= $row['id'] ?>">
+                                        <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </div>
+                                
+                                <?php if($current_admin == 'admin') { ?>
+                                <form method="POST" style="display:flex; gap:6px; align-items:center; width:100%; border-top:1px dashed var(--border); padding-top:8px; margin-top:2px;">
                                     <input type="hidden" name="id_pesanan" value="<?= $row['id'] ?>">
-                                    <select name="status_bayar" class="form-control" style="padding:6px; width:auto; font-size:0.8rem; margin:0;">
-                                        <option value="Belum Bayar" <?= $row['status_pembayaran']=='Belum Bayar'?'selected':'' ?>>Belum Bayar</option>
-                                        <option value="Menunggu Konfirmasi" <?= $row['status_pembayaran']=='Menunggu Konfirmasi'?'selected':'' ?>>Cek Mutasi</option>
-                                        <option value="Lunas" <?= $row['status_pembayaran']=='Lunas'?'selected':'' ?>>Lunas</option>
+                                    <select name="admin_assign_id" class="form-control" style="padding:4px; flex:1; font-size:0.75rem; border-color:var(--primary); font-weight:500;">
+                                        <option value="">-- Tugaskan ke --</option>
+                                        <?php foreach($list_admins as $ad){ ?>
+                                            <option value="<?= $ad['id'] ?>" <?= ($row['admin_id'] == $ad['id']) ? 'selected' : '' ?>><?= htmlspecialchars($ad['username']) ?></option>
+                                        <?php } ?>
                                     </select>
-                                    <button type="submit" name="update_status_pesanan" class="btn-action btn-primary"><i class="fas fa-check"></i></button>
+                                    <button type="submit" name="update_assign" class="btn-action btn-secondary" style="padding:4px 8px;"><i class="fas fa-user-edit"></i></button>
                                 </form>
-                                <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirm('Yakin ingin menghapus pesanan ini?');">
-                                    <input type="hidden" name="tabel" value="pesanan">
-                                    <input type="hidden" name="id_hapus" value="<?= $row['id'] ?>">
-                                    <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
-                                </form>
+                                <?php } else { ?>
+                                    <div style="width:100%; border-top:1px dashed var(--border); padding-top:8px; margin-top:2px;">
+                                        <?php if($row['admin_id']) echo "<span class='badge badge-blue' style='width:100%; text-align:center;'><i class='fas fa-id-badge'></i> Ditugaskan pada Anda</span>"; ?>
+                                    </div>
+                                <?php } ?>
                             </td>
                         </tr>
                         <?php } ?>
@@ -665,6 +752,13 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                         <label>Password</label>
                         <input type="password" name="password_baru" class="form-control" placeholder="Ketik password..." required>
                     </div>
+                    <div class="form-group">
+                        <label>Hak Akses (Role)</label>
+                        <select name="role_baru" class="form-control" required>
+                            <option value="Staff">Staff (Akses Terbatas Terhadap Penugasannya)</option>
+                            <option value="Super Admin">Super Admin (Akses Penuh Seluruh Sistem)</option>
+                        </select>
+                    </div>
                     <button type="submit" name="tambah_admin" class="btn-action btn-primary" style="width:100%; padding:12px; font-size:1rem; display:block; text-align:center;">Simpan Admin</button>
                 </form>
             </div>
@@ -673,7 +767,7 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                 <div class="card-header"><i class="fas fa-users"></i> Daftar Admin Terdaftar</div>
                 <table>
                     <thead>
-                        <tr><th>ID</th><th>Username</th><th>Aksi</th></tr>
+                        <tr><th>ID</th><th>Username</th><th>Akses / Role</th><th>Aksi</th></tr>
                     </thead>
                     <tbody>
                         <?php 
@@ -682,14 +776,33 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                         <tr>
                             <td>#<?= $adm['id'] ?></td>
                             <td style="font-weight:600;"><?= $adm['username'] ?></td>
+                            <td><?= $adm['role'] == 'Super Admin' ? "<span class='badge badge-yellow'><i class='fas fa-crown'></i> Super Admin</span>" : "<span class='badge badge-blue'>Staff User</span>" ?></td>
                             <td>
-                                <?php if($adm['username'] != 'admin') { ?>
-                                <form method="POST" action="admin.php?menu=admin" onsubmit="return confirm('Yakin ingin mencabut akses admin ini?');">
-                                    <input type="hidden" name="tabel" value="admin_users">
-                                    <input type="hidden" name="id_hapus" value="<?= $adm['id'] ?>">
-                                    <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i> Cabut Akses</button>
-                                </form>
-                                <?php } else { echo "<span class='badge badge-yellow'>Super Admin</span>"; } ?>
+                                <?php if($adm['role'] != 'Super Admin') { ?>
+                                <div style="display:flex; flex-direction:column; gap:5px; align-items:flex-start;">
+                                    <form method="POST" action="admin.php?menu=admin" onsubmit="return confirm('Yakin ingin mencabut akses admin ini?');" style="margin:0;">
+                                        <input type="hidden" name="tabel" value="admin_users">
+                                        <input type="hidden" name="id_hapus" value="<?= $adm['id'] ?>">
+                                        <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i> Cabut Akses</button>
+                                    </form>
+                                    <button type="button" onclick="document.getElementById('pass_<?= $adm['id'] ?>').style.display='flex';" class="btn-action btn-secondary" style="font-size:0.75rem;"><i class="fas fa-key"></i> Pass Staff</button>
+                                    <form method="POST" id="pass_<?= $adm['id'] ?>" style="display:none; gap:5px; align-items:center;">
+                                        <input type="hidden" name="id_admin" value="<?= $adm['id'] ?>">
+                                        <input type="password" name="password_baru" class="form-control" style="padding:4px; font-size:0.75rem; width:100px; height:auto;" placeholder="Pass baru..." required>
+                                        <button type="submit" name="ubah_password" class="btn-action btn-primary" style="padding:4px 8px;"><i class="fas fa-check"></i></button>
+                                    </form>
+                                </div>
+                                <?php } else { ?>
+                                <div style="display:flex; flex-direction:column; gap:5px; align-items:flex-start;">
+                                    <span style='font-size:0.8rem; color:var(--muted);'><i class='fas fa-shield-alt'></i> Terlindungi</span>
+                                    <button type="button" onclick="document.getElementById('pass_<?= $adm['id'] ?>').style.display='flex';" class="btn-action btn-secondary" style="font-size:0.75rem;"><i class="fas fa-key"></i> Ubah Pass Saya</button>
+                                    <form method="POST" id="pass_<?= $adm['id'] ?>" style="display:none; gap:5px; align-items:center;">
+                                        <input type="hidden" name="id_admin" value="<?= $adm['id'] ?>">
+                                        <input type="password" name="password_baru" class="form-control" style="padding:4px; font-size:0.75rem; width:100px; height:auto;" placeholder="Pass baru..." required>
+                                        <button type="submit" name="ubah_password" class="btn-action btn-primary" style="padding:4px 8px;"><i class="fas fa-check"></i></button>
+                                    </form>
+                                </div>
+                                <?php } ?>
                             </td>
                         </tr>
                         <?php } ?>
@@ -825,6 +938,71 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             }
         }
         </script>
+        <?php } elseif($menu == 'kalender') { 
+            // Ambil data pesanan untuk kalender
+            $adminFilterKalender = "";
+            $current_role  = isset($_SESSION['admin_role']) ? $_SESSION['admin_role'] : 'Super Admin';
+            $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+
+            if($current_role != 'Super Admin') {
+                $adminFilterKalender = "AND p.admin_id='$my_id'"; 
+            }
+
+            $q_kalender = mysqli_query($conn, "SELECT p.nama_pemesan, p.tanggal_acara 
+                                               FROM pesanan p 
+                                               WHERE p.status_pembayaran != 'Belum Bayar' $adminFilterKalender");
+            $events = [];
+            while($row = mysqli_fetch_assoc($q_kalender)){
+                $events[] = array(
+                    'title' => 'TERBOOKING - ' . $row['nama_pemesan'],
+                    'start' => $row['tanggal_acara'],
+                    'color' => '#fca5a5',
+                    'textColor' => '#991b1b',
+                    'allDay' => true
+                );
+            }
+        ?>
+        <div class="page-header" data-aos="fade-down">
+            <h1 class="page-title">Cek Ketersediaan Jadwal</h1>
+            <p style="color: var(--muted);">Klik tanggal kosong untuk booking. <span class="badge badge-red">MERAH</span> = Terisi.</p>
+        </div>
+
+        <div class="card" data-aos="fade-up" data-aos-delay="200" style="padding: 25px; min-height:600px;">
+            <div id='calendar'></div>
+        </div>
+        
+        <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+              initialView: 'dayGridMonth',
+              themeSystem: 'standard',
+              headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listMonth'
+              },
+              buttonText: {
+                today: 'Hari Ini',
+                month: 'Bulan',
+                week: 'Minggu',
+                list: 'Daftar'
+              },
+              locale: 'id',
+              events: <?= json_encode($events) ?>
+            });
+            calendar.render();
+          });
+        </script>
+        <style>
+            .fc-event { border: none !important; border-radius: 4px; padding: 2px 4px; font-weight: 600; font-size: 0.8rem; }
+            .fc-toolbar-title { font-size: 1.4rem !important; font-weight: 700 !important; color: var(--primary); }
+            .fc-button-primary { background-color: var(--primary) !important; border: none !important; transition: 0.2s; }
+            .fc-button-primary:hover { background-color: #3b4b3e !important; }
+            .fc-day-today { background-color: #fefce8 !important; }
+        </style>
+
         <?php } ?>
 
     </main>

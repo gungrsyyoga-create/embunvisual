@@ -545,8 +545,8 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
     <!-- Galeri Momen Dinamis -->
     <section id="galeri" class="section" style="background-color: var(--surface);">
         <div class="sec-header" data-aos="fade-up">
-            <h2 class="sec-title serif">Momen Estetik</h2>
-            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya visual kami.</p>
+            <h2 class="sec-title serif">Gallry PhotoShoot</h2>
+            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya Teduh Visual.</p>
         </div>
         
         <div class="gallery-grid" data-aos="fade-up" data-aos-delay="100">

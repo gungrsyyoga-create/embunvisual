@@ -146,11 +146,13 @@ if(isset($_POST['tambah_admin'])){
 // E. Tambah Galeri Homepage
 if(isset($_POST['tambah_galeri'])){
     $caption = mysqli_real_escape_string($conn, $_POST['caption']);
+    $sumber_nama = mysqli_real_escape_string($conn, $_POST['sumber_nama']);
+    $sumber_link = mysqli_real_escape_string($conn, $_POST['sumber_link']);
     $type = $_POST['tipe_input'];
     
     if($type == 'url'){
         $gambar = mysqli_real_escape_string($conn, trim($_POST['gambar_url']));
-        if(mysqli_query($conn, "INSERT INTO galeri (gambar, type, caption) VALUES ('$gambar', 'url', '$caption')")){
+        if(mysqli_query($conn, "INSERT INTO galeri (gambar, type, caption, sumber_nama, sumber_link) VALUES ('$gambar', 'url', '$caption', '$sumber_nama', '$sumber_link')")){
             $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Foto galeri dari URL ditambahkan.', 'success');";
         }
     } else if($type == 'upload') {
@@ -164,7 +166,7 @@ if(isset($_POST['tambah_galeri'])){
             $upload_path = 'uploads/galeri/'.$new_name;
             
             if(move_uploaded_file($tmp_file, $upload_path)){
-                if(mysqli_query($conn, "INSERT INTO galeri (gambar, type, caption) VALUES ('$upload_path', 'upload', '$caption')")){
+                if(mysqli_query($conn, "INSERT INTO galeri (gambar, type, caption, sumber_nama, sumber_link) VALUES ('$upload_path', 'upload', '$caption', '$sumber_nama', '$sumber_link')")){
                     $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Foto berhasil di-upload ke galeri.', 'success');";
                 }
             } else {
@@ -564,6 +566,17 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                             <input type="text" name="caption" class="form-control" placeholder="Msl: Momen Pre-wedding di Bali">
                         </div>
 
+                        <div class="form-group" style="display:flex; gap:15px;">
+                            <div style="flex:1;">
+                                <label>Nama Sumber Foto (Opsional)</label>
+                                <input type="text" name="sumber_nama" class="form-control" placeholder="Msl: Teduh Visual">
+                            </div>
+                            <div style="flex:1;">
+                                <label>Link Sumber Foto (Opsional)</label>
+                                <input type="text" name="sumber_link" class="form-control" placeholder="Msl: https://instagram.com/...">
+                            </div>
+                        </div>
+
                         <button type="submit" name="tambah_galeri" class="btn-action btn-primary" style="width:100%; padding:14px; font-size:1rem; display:flex; justify-content:center; align-items:center; gap:8px;">
                             <i class="fas fa-upload"></i> Tambahkan ke Galeri
                         </button>
@@ -593,6 +606,9 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
                             </td>
                             <td>
                                 <b><?= !empty($g['caption']) ? htmlspecialchars($g['caption']) : '<i style="color:#A0A0A0;">Tanpa Caption</i>' ?></b><br>
+                                <?php if(!empty($g['sumber_nama'])) { ?>
+                                    <span style="font-size:0.85rem; color:var(--muted);">Sumber: <a href="<?= htmlspecialchars($g['sumber_link']) ?>" target="_blank" style="color:#0284c7; text-decoration:none;"><?= htmlspecialchars($g['sumber_nama']) ?></a></span><br>
+                                <?php } ?>
                                 <span class="badge <?= ($g['type'] == 'upload') ? 'badge-blue' : 'badge-green' ?>" style="margin-top: 5px; display:inline-block;">
                                     <i class="fas <?= ($g['type'] == 'upload') ? 'fa-upload' : 'fa-link' ?>"></i> 
                                     <?= ($g['type'] == 'upload') ? 'File Upload' : 'External URL' ?>

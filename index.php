@@ -546,7 +546,7 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
     <section id="galeri" class="section" style="background-color: var(--surface);">
         <div class="sec-header" data-aos="fade-up">
             <h2 class="sec-title serif">Gallry PhotoShoot</h2>
-            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya Teduh Visual.</p>
+            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya Patner Teduh Visual.</p>
         </div>
         
         <div class="gallery-grid" data-aos="fade-up" data-aos-delay="100">
@@ -557,8 +557,20 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             ?>
             <div class="gallery-item">
                 <img src="<?php echo htmlspecialchars($g['gambar']); ?>" alt="Embun Visual Gallery">
-                <?php if(!empty($g['caption'])) { ?>
-                <div class="gallery-caption"><?php echo htmlspecialchars($g['caption']); ?></div>
+                <?php if(!empty($g['caption']) || !empty($g['sumber_nama'])) { ?>
+                <div class="gallery-caption">
+                    <?php if(!empty($g['caption'])) { echo "<div style='margin-bottom:5px; font-weight:500;'>".htmlspecialchars($g['caption'])."</div>"; } ?>
+                    <?php if(!empty($g['sumber_nama'])) { ?>
+                        <div style="font-size:0.75rem; color:rgba(255,255,255,0.7);">
+                            Sumber Foto: 
+                            <?php if(!empty($g['sumber_link'])) { ?>
+                                <a href="<?php echo htmlspecialchars($g['sumber_link']); ?>" target="_blank" style="color:var(--gold); text-decoration:none; transition:0.3s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--gold)'"><?php echo htmlspecialchars($g['sumber_nama']); ?></a>
+                            <?php } else { ?>
+                                <span style="color:var(--gold);"><?php echo htmlspecialchars($g['sumber_nama']); ?></span>
+                            <?php } ?>
+                        </div>
+                    <?php } ?>
+                </div>
                 <?php } ?>
             </div>
             <?php 

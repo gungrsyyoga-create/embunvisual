@@ -10,71 +10,16 @@ include 'config.php';
 // ==========================================
 // 1. SISTEM AUTENTIKASI (LOGIN & LOGOUT)
 // ==========================================
-if(isset($_POST['login'])) {
-    $user = mysqli_real_escape_string($conn, $_POST['username']);
-    $pass = md5($_POST['password']);
-    
-    $query_login = "SELECT * FROM admin_users WHERE username='$user' AND password='$pass'";
-    $cek = mysqli_query($conn, $query_login);
-    
-    if (!$cek) {
-        die("<div style='background:#fee2e2; color:#991b1b; padding:20px; font-family:sans-serif; text-align:center;'>
-                <b>CRASH DATABASE DETECTED!</b><br>
-                Pesan Error MySQL: " . mysqli_error($conn) . "
-             </div>");
-    }
-    
-    if(mysqli_num_rows($cek) > 0) {
-        $row_admin = mysqli_fetch_assoc($cek);
-        $_SESSION['admin_embun'] = true;
-        $_SESSION['admin_id'] = $row_admin['id'];
-        $_SESSION['admin_username'] = $row_admin['username'];
-        $_SESSION['admin_role'] = $row_admin['role'];
-        header("Location: admin.php"); 
-        exit;
-    } else {
-        $error_login = "Username atau Password salah!";
-    }
+// Jika belum login, tendang ke login.php
+if(!isset($_SESSION['admin_embun'])) {
+    header("Location: login.php");
+    exit;
 }
 
 if(isset($_GET['logout'])) {
     session_destroy();
-    header("Location: admin.php");
+    header("Location: login.php");
     exit;
-}
-
-// JIKA BELUM LOGIN, TAMPILKAN HALAMAN LOGIN
-if(!isset($_SESSION['admin_embun'])) {
-?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <title>Login | Embun Visual Workspace</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F9FAF8; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); width: 100%; max-width: 380px; text-align: center; border: 1px solid #f1f1f1; }
-        input { width: 100%; padding: 14px; margin: 10px 0 20px; border: 1px solid #e2e8f0; border-radius: 8px; outline: none; transition: 0.3s; }
-        input:focus { border-color: #4A5D4E; }
-        button { width: 100%; padding: 14px; background: #4A5D4E; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #3b4b3e; }
-    </style>
-</head>
-<body>
-    <div class="login-box">
-        <h2 style="color: #4A5D4E; margin:0 0 5px 0;">Embun Visual</h2>
-        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 25px;">Secure Workspace Access</p>
-        <?php if(isset($error_login)) echo "<div style='color:#ef4444; background:#fef2f2; padding:10px; border-radius:8px; font-size:0.85rem; margin-bottom:15px;'>$error_login</div>"; ?>
-        <form method="POST">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit" name="login">Sign In</button>
-        </form>
-    </div>
-</body>
-</html>
-<?php 
-    exit; 
 }
 
 // ==========================================

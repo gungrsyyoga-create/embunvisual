@@ -527,6 +527,111 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
             </table>
         </div>
 
+        <?php } elseif($menu == 'galeri') { ?>
+        <div class="page-header" data-aos="fade-down">
+            <h1 class="page-title">Galeri Landing Page</h1>
+            <p style="color: var(--muted);">Tambahkan foto kenangan dari perangkat atau tautan eksternal untuk ditampilkan di halaman depan (index.php).</p>
+        </div>
+
+        <div style="display:flex; gap:30px; align-items: flex-start;">
+            <div class="card" data-aos="fade-right" data-aos-delay="200" style="flex: 1; position: sticky; top: 40px;">
+                <div class="card-header"><i class="fas fa-plus-circle"></i> Tambah Foto Baru</div>
+                <div style="padding: 25px;">
+                    <form method="POST" action="admin.php?menu=galeri" enctype="multipart/form-data">
+                        
+                        <div class="form-group">
+                            <label>Metode Input Gambar</label>
+                            <select name="tipe_input" id="tipe_input" class="form-control" onchange="toggleInputType()">
+                                <option value="url">Link Tautan (URL)</option>
+                                <option value="upload">Upload File Lokal</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="input_url">
+                            <label>Tautan Gambar (URL) <span style="color:red">*</span></label>
+                            <input type="text" name="gambar_url" class="form-control" placeholder="https://contoh.com/foto.jpg">
+                            <span class="text-hint">Rekomendasi: Gunakan link Pinterest atau Unsplash untuk menghemat server.</span>
+                        </div>
+
+                        <div class="form-group" id="input_upload" style="display:none;">
+                            <label>Pilih File Foto <span style="color:red">*</span></label>
+                            <input type="file" name="gambar_file" class="form-control" accept="image/png, image/jpeg, image/jpg, image/webp" style="padding-bottom: 35px;">
+                            <span class="text-hint">Format: JPG, PNG, WEBP. Maksimum: 2MB.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Caption / Judul (Opsional)</label>
+                            <input type="text" name="caption" class="form-control" placeholder="Msl: Momen Pre-wedding di Bali">
+                        </div>
+
+                        <button type="submit" name="tambah_galeri" class="btn-action btn-primary" style="width:100%; padding:14px; font-size:1rem; display:flex; justify-content:center; align-items:center; gap:8px;">
+                            <i class="fas fa-upload"></i> Tambahkan ke Galeri
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card" data-aos="fade-left" data-aos-delay="300" style="flex: 2;">
+                <div class="card-header"><i class="fas fa-images"></i> Daftar Foto Galeri</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Preview</th>
+                            <th>Detail & Caption</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $q_galeri = mysqli_query($conn, "SELECT * FROM galeri ORDER BY id DESC");
+                        while($g = mysqli_fetch_assoc($q_galeri)) { 
+                            $img_src = ($g['type'] == 'upload') ? $g['gambar'] : $g['gambar'];
+                        ?>
+                        <tr>
+                            <td style="width: 120px;">
+                                <div style="width: 100px; height: 100px; border-radius: 8px; background-image: url('<?= $img_src ?>'); background-size: cover; background-position: center; border: 1px solid var(--border);"></div>
+                            </td>
+                            <td>
+                                <b><?= !empty($g['caption']) ? htmlspecialchars($g['caption']) : '<i style="color:#A0A0A0;">Tanpa Caption</i>' ?></b><br>
+                                <span class="badge <?= ($g['type'] == 'upload') ? 'badge-blue' : 'badge-green' ?>" style="margin-top: 5px; display:inline-block;">
+                                    <i class="fas <?= ($g['type'] == 'upload') ? 'fa-upload' : 'fa-link' ?>"></i> 
+                                    <?= ($g['type'] == 'upload') ? 'File Upload' : 'External URL' ?>
+                                </span>
+                            </td>
+                            <td>
+                                <form method="POST" action="admin.php?menu=galeri" onsubmit="return confirm('Yakin ingin menghapus foto ini dari galeri beranda?');">
+                                    <input type="hidden" name="tabel" value="galeri">
+                                    <input type="hidden" name="id_hapus" value="<?= $g['id'] ?>">
+                                    <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i> Hapus</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php } ?>
+                        <?php if(mysqli_num_rows($q_galeri) == 0) { ?>
+                        <tr><td colspan="3" style="text-align:center; padding: 40px; color: var(--muted);"><i class="fas fa-info-circle fa-2x" style="margin-bottom:10px; opacity:0.3; display:block;"></i> Belum ada foto di dalam galeri ini.</td></tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <script>
+        function toggleInputType() {
+            var type = document.getElementById('tipe_input').value;
+            if(type === 'url') {
+                document.getElementById('input_url').style.display = 'block';
+                document.getElementById('input_upload').style.display = 'none';
+                document.querySelector('input[name="gambar_url"]').setAttribute('required', 'required');
+                document.querySelector('input[name="gambar_file"]').removeAttribute('required');
+            } else {
+                document.getElementById('input_url').style.display = 'none';
+                document.getElementById('input_upload').style.display = 'block';
+                document.querySelector('input[name="gambar_url"]').removeAttribute('required');
+                document.querySelector('input[name="gambar_file"]').setAttribute('required', 'required');
+            }
+        }
+        </script>
+
         <?php } elseif($menu == 'admin') { ?>
         <div class="page-header" data-aos="fade-down">
             <h1 class="page-title">Kelola Admin</h1>

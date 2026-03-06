@@ -423,7 +423,43 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
         .accordion-body ul { padding-left: 20px; margin-top: 10px; }
         .accordion-body li { margin-bottom: 8px; }
 
-
+        /* Momen Ekstetik (Gallery) */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .gallery-item {
+            position: relative;
+            border-radius: 0px;
+            overflow: hidden;
+            aspect-ratio: 4/5;
+            cursor: pointer;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s ease;
+        }
+        .gallery-item:hover img {
+            transform: scale(1.08);
+        }
+        .gallery-caption {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            padding: 30px 20px 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            color: #fff;
+            transform: translateY(100%);
+            transition: transform 0.4s ease;
+            font-size: 0.9rem;
+            font-weight: 300;
+        }
+        .gallery-item:hover .gallery-caption {
+            transform: translateY(0);
+        }
 
         @media (max-width: 900px) {
             .custom-area { flex-direction: column; }
@@ -501,6 +537,34 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                 } 
             } else {
                 echo "<div style='grid-column: 1/-1; text-align:center; padding:80px 20px; background:#fff; border:1px solid #E5E2DC;' data-aos='fade-up'><h3 class='serif' style='font-size:2rem; color:var(--primary); margin-bottom:10px;'>Koleksi Belum Memiliki Tema</h3><p style='color:#737373; font-weight:300;'>Silakan login ke panel admin untuk menambahkan tema baru.</p></div>";
+            }
+            ?>
+        </div>
+    </section>
+
+    <!-- Galeri Momen Dinamis -->
+    <section id="galeri" class="section" style="background-color: var(--surface);">
+        <div class="sec-header" data-aos="fade-up">
+            <h2 class="sec-title serif">Momen Estetik</h2>
+            <p class="sec-desc">Kumpulan memori indah yang diabadikan dengan sempurna melalui karya visual kami.</p>
+        </div>
+        
+        <div class="gallery-grid" data-aos="fade-up" data-aos-delay="100">
+            <?php 
+            $query_galeri = mysqli_query($conn, "SELECT * FROM galeri ORDER BY id DESC LIMIT 8");
+            if($query_galeri && mysqli_num_rows($query_galeri) > 0) {
+                while($g = mysqli_fetch_assoc($query_galeri)) { 
+            ?>
+            <div class="gallery-item">
+                <img src="<?php echo htmlspecialchars($g['gambar']); ?>" alt="Embun Visual Gallery">
+                <?php if(!empty($g['caption'])) { ?>
+                <div class="gallery-caption"><?php echo htmlspecialchars($g['caption']); ?></div>
+                <?php } ?>
+            </div>
+            <?php 
+                } 
+            } else {
+                echo "<p style='grid-column: 1/-1; text-align:center; color: var(--text-muted);'>Koleksi foto sedang kami siapkan untuk Anda.</p>";
             }
             ?>
         </div>

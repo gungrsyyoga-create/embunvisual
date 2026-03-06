@@ -259,8 +259,8 @@ $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
         <a href="?menu=katalog" class="nav-item <?= $menu == 'katalog' ? 'active' : '' ?>"><i class="fas fa-layer-group"></i> Kelola Katalog</a>
         <?php } ?>
         <a href="?menu=request" class="nav-item <?= $menu == 'request' ? 'active' : '' ?>"><i class="fas fa-paint-brush"></i> Request Custom</a>
-        <a href="?menu=galeri" class="nav-item <?= $menu == 'galeri' ? 'active' : '' ?>"><i class="fas fa-images"></i> Pengaturan Galeri</a>
         <?php if($current_role == 'Super Admin') { ?>
+        <a href="?menu=galeri" class="nav-item <?= $menu == 'galeri' ? 'active' : '' ?>"><i class="fas fa-images"></i> Pengaturan Galeri</a>
         <a href="?menu=admin" class="nav-item <?= $menu == 'admin' ? 'active' : '' ?>"><i class="fas fa-users-cog"></i> Kelola Admin</a>
         <?php } ?>
         <a href="?menu=kalender" class="nav-item <?= $menu == 'kalender' ? 'active' : '' ?>"><i class="fas fa-calendar-alt"></i> Kalender Booking</a>

@@ -103,20 +103,31 @@ if(isset($_POST['update_status_pesanan'])){
     $foto_path = null;
     
     // Cek apakah statusnya benar berubah, jika sama tidak perlu dilog
-    if($status_baru != $status_awal) {
+        if($status_baru != $status_awal) {
         if(mysqli_query($conn, "UPDATE pesanan SET status_pembayaran='$status_baru' WHERE id='$id_pesanan'")){
             // Log activity
             $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
             $ket_log = "Mengubah status pembayaran dari [$status_awal] menjadi [$status_baru]";
             catatLog($conn, $my_id_log, 'Update Pesanan', $invoice_lama, $ket_log, null);
-            
+
+            // ── Kirim email notifikasi jika status berubah ke LUNAS
+            if($status_baru === 'Lunas') {
+                $dp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.id='$id_pesanan'"));
+                if(!empty($dp['email_pemesan'])) {
+                    require_once __DIR__ . '/includes/mailer.php';
+                    $checkout_url = (isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on'?'https':'http')."://{$_SERVER['HTTP_HOST']}/" . ltrim(dirname($_SERVER['PHP_SELF']), '/') . "/invoice.php?inv=" . urlencode($dp['invoice']);
+                    $body = emailLunas($dp['nama_pemesan'], $dp['invoice'], $dp['nama_tema'] ?? '-', $dp['tanggal_acara'], $dp['total_tagihan'], $checkout_url);
+                    kirimEmail($dp['email_pemesan'], $dp['nama_pemesan'], '✅ Pembayaran Dikonfirmasi - Embun Visual', $body);
+                }
+            }
+
             $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
-            header("Location: admin.php?menu=pesanan"); exit;
+            header("Location: admin.php?menu=tugas"); exit;
         }
     } else {
         // Status tidak berubah, lempar kembali
         $_SESSION['notif_pesan'] = "Swal.fire('Info', 'Status pembayaran tidak ada yang berubah.', 'info');";
-        header("Location: admin.php?menu=pesanan"); exit;
+        header("Location: admin.php?menu=tugas"); exit;
     }
 }
 
@@ -161,11 +172,19 @@ if(isset($_POST['update_tugas_selesai'])){
 // A1b. Super Admin Verifikasi Tugas
 if(isset($_POST['verifikasi_tugas'])){
     $id_pesanan = (int)$_POST['id_pesanan'];
-    $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"));
+    $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.id='$id_pesanan'"));
     if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Selesai', catatan_revisi=NULL WHERE id='$id_pesanan'")){
         $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
         catatLog($conn, $my_id_log, 'Verifikasi Tugas', $dt_lama['invoice'], "Super Admin memverifikasi tugas. Status pengerjaan menjadi [Selesai]", null);
-        $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi.', 'success');";
+
+        // ── Kirim email notifikasi Proyek Selesai
+        if(!empty($dt_lama['email_pemesan'])) {
+            require_once __DIR__ . '/includes/mailer.php';
+            $body = emailSelesai($dt_lama['nama_pemesan'], $dt_lama['invoice'], $dt_lama['nama_tema'] ?? '-');
+            kirimEmail($dt_lama['email_pemesan'], $dt_lama['nama_pemesan'], '🎉 Undangan Digital Anda Sudah Selesai! - Embun Visual', $body);
+        }
+
+        $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi dan email notifikasi dikirim.', 'success');";
         header("Location: admin.php?menu=tugas"); exit;
     }
 }

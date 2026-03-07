@@ -58,9 +58,10 @@ $i18n = [
         'mod_title' => 'Reservasi',
         'mod_sub' => 'Tema Terpilih:',
         'mod_ph_name' => 'Nama Pasangan / Penyelenggara',
-        'mod_ph_wa' => 'Nomor WhatsApp',
-        'mod_agree' => 'Saya telah membaca & menyetujui seluruh <a href="#" onclick="showTermsPopup(event)" style="color: var(--gold); text-decoration: underline;">Syarat & Ketentuan Layanan</a> Embun Visual.',
-        'mod_btn' => 'Lanjut ke Eksekusi'
+        'mod_ph_wa'   => 'Nomor WhatsApp (Aktif)',
+        'mod_ph_email'=> 'Alamat Gmail (untuk notifikasi)',
+        'mod_agree'   => 'Saya telah membaca & menyetujui seluruh <a href="#" onclick="showTermsPopup(event)" style="color: var(--gold); text-decoration: underline;">Syarat & Ketentuan Layanan</a> Embun Visual.',
+        'mod_btn'     => 'Lanjut ke Eksekusi'
     ],
     'en' => [
         'nav_katalog' => 'Theme Collection',
@@ -102,10 +103,11 @@ $i18n = [
         'footer_copy' => '&copy; 2024 Embun Visual. All Rights Reserved.',
         'mod_title' => 'Reservation',
         'mod_sub' => 'Selected Theme:',
-        'mod_ph_name' => 'Couple\'s / Host\'s Name',
-        'mod_ph_wa' => 'WhatsApp Number',
-        'mod_agree' => 'I have read & agree to all Embun Visual <a href="#" onclick="showTermsPopup(event)" style="color: var(--gold); text-decoration: underline;">Terms & Conditions of Service</a>.',
-        'mod_btn' => 'Proceed to Execution'
+        'mod_ph_name'  => 'Couple\'s / Host\'s Name',
+        'mod_ph_wa'    => 'Active WhatsApp Number',
+        'mod_ph_email' => 'Gmail Address (for notifications)',
+        'mod_agree'    => 'I have read & agree to all Embun Visual <a href="#" onclick="showTermsPopup(event)" style="color: var(--gold); text-decoration: underline;">Terms & Conditions of Service</a>.',
+        'mod_btn'      => 'Proceed to Execution'
     ]
 ];
 $txt = $i18n[$lang];
@@ -115,9 +117,10 @@ $txt = $i18n[$lang];
 // 1. PROSES FORM BOOKING (Diarahkan ke Checkout)
 // ==========================================
 if(isset($_POST['submit_booking'])){
-    $invoice = "INV-" . date('Ymd') . "-" . rand(100,999);
-    $nama = mysqli_real_escape_string($conn, $_POST['nama']);
-    $wa = mysqli_real_escape_string($conn, $_POST['whatsapp']);
+    $invoice  = "INV-" . date('Ymd') . "-" . rand(100,999);
+    $nama     = mysqli_real_escape_string($conn, $_POST['nama']);
+    $wa       = mysqli_real_escape_string($conn, $_POST['whatsapp']);
+    $email_bk = mysqli_real_escape_string($conn, trim($_POST['email_booking'] ?? ''));
     $tgl_acara = $_POST['tanggal_acara'];
     
     // Ambil data tema untuk harga
@@ -127,9 +130,9 @@ if(isset($_POST['submit_booking'])){
         $data_tema = mysqli_fetch_assoc($cek_tema);
         $harga = $data_tema['harga'];
 
-        // Simpan ke database
-        $query_booking = "INSERT INTO pesanan (invoice, nama_pemesan, no_whatsapp, tema_id, tanggal_acara, total_tagihan) 
-                          VALUES ('$invoice', '$nama', '$wa', '$tema_id', '$tgl_acara', '$harga')";
+        // Simpan ke database (termasuk email)
+        $query_booking = "INSERT INTO pesanan (invoice, nama_pemesan, no_whatsapp, email_pemesan, tema_id, tanggal_acara, total_tagihan) 
+                          VALUES ('$invoice', '$nama', '$wa', '$email_bk', '$tema_id', '$tgl_acara', '$harga')";
         
         if(mysqli_query($conn, $query_booking)){
             // Arahkan otomatis ke halaman checkout membawa nomor Invoice
@@ -916,6 +919,10 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                 </div>
                 <div class="form-group">
                     <input type="number" name="whatsapp" class="form-control" placeholder="<?= $txt['mod_ph_wa'] ?>" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" name="email_booking" class="form-control" placeholder="<?= $txt['mod_ph_email'] ?>"
+                        style="" required>
                 </div>
                 <div class="form-group">
                     <input type="date" name="tanggal_acara" class="form-control" required style="color: #A0A0A0;" onfocus="this.style.color='var(--text-main)'">

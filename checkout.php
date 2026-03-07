@@ -18,12 +18,16 @@ if (!$data) {
 
 // PROSES KONFIRMASI PEMBAYARAN
 if(isset($_POST['konfirmasi_bayar'])){
-    // Ubah status di database jadi Menunggu Konfirmasi
-    mysqli_query($conn, "UPDATE pesanan SET status_pembayaran = 'Menunggu Konfirmasi' WHERE invoice = '$invoice'");
+    // Simpan email pemesan jika diisi
+    $email_pemesan = mysqli_real_escape_string($conn, trim($_POST['email_pemesan'] ?? ''));
+    
+    // Ubah status & simpan email
+    mysqli_query($conn, "UPDATE pesanan SET status_pembayaran='Menunggu Konfirmasi', email_pemesan='$email_pemesan' WHERE invoice='$invoice'");
     
     // Siapkan pesan WA otomatis
     $nomor_admin = "6281234567890"; // <- GANTI NOMOR WA KAMU
-    $pesan_wa = "Halo Admin Embun Visual,%0A%0ASaya sudah melakukan pembayaran untuk:%0A*No. Invoice:* $invoice%0A*Nama:* {$data['nama_pemesan']}%0A*Total:* Rp " . number_format($data['total_tagihan'],0,',','.') . "%0A%0ABerikut saya lampirkan bukti transfernya.";
+    $email_info  = $email_pemesan ? "%0A*Email:* $email_pemesan" : '';
+    $pesan_wa = "Halo Admin Embun Visual,%0A%0ASaya sudah melakukan pembayaran untuk:%0A*No. Invoice:* $invoice%0A*Nama:* {$data['nama_pemesan']}$email_info%0A*Total:* Rp " . number_format($data['total_tagihan'],0,',','.') . "%0A%0ABerikut saya lampirkan bukti transfernya.";
     
     // Arahkan ke WA
     echo "<script>
@@ -322,6 +326,7 @@ if(isset($_POST['konfirmasi_bayar'])){
                     </div>
                 </div>
 
+                <!-- Form konfirmasi -->  
                 <form method="POST" data-aos="fade-up" data-aos-delay="900" style="margin: 0;">
                     <div class="action-buttons">
                         <button type="submit" name="konfirmasi_bayar" class="btn-confirm">
@@ -334,7 +339,8 @@ if(isset($_POST['konfirmasi_bayar'])){
                 </form>
                 
                 <p class="footer-note" data-aos="fade-in" data-aos-delay="1000">
-                    Setelah melakukan konfirmasi, Anda akan otomatis terhubung ke WhatsApp Admin kami untuk mengirimkan lampiran bukti transfer.
+                    Setelah konfirmasi, Anda akan diarahkan ke WhatsApp Admin untuk lampiran bukti transfer.<br>
+                    <span style="color:var(--gold);">✉️</span> Notifikasi email akan dikirim saat pembayaran diverifikasi &amp; saat undangan selesai.
                 </p>
             </div>
         </div>

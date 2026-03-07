@@ -293,9 +293,19 @@ if(isset($data['created_at']) && $data['created_at'] != "" && $data['created_at'
 <body>
 
     <div class="action-bar">
-        <a href="checkout.php?inv=<?php echo $invoice; ?>" class="btn btn-pay"><i class="fas fa-credit-card"></i> Kembali & Bayar</a>
+        <a href="checkout.php?inv=<?php echo $invoice; ?>" class="btn btn-pay"><i class="fas fa-credit-card"></i> Kembali &amp; Bayar</a>
         <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Cetak Dokumen</button>
     </div>
+
+    <?php if(strtolower($data['status_pembayaran']) === 'lunas') { ?>
+    <div style="max-width:850px; margin:0 auto 15px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1px solid #bbf7d0; border-radius:8px; padding:14px 24px; display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.5rem;">✅</span>
+        <div>
+            <div style="font-weight:700; color:#166534; font-size:0.95rem;">Pembayaran Telah Dikonfirmasi &mdash; LUNAS</div>
+            <div style="font-size:0.82rem; color:#15803d;">Invoice ini dapat Anda simpan sebagai bukti pembayaran resmi.</div>
+        </div>
+    </div>
+    <?php } ?>
 
     <div class="invoice-wrapper">
         <div class="inv-header">
@@ -336,8 +346,11 @@ if(isset($data['created_at']) && $data['created_at'] != "" && $data['created_at'
             <div class="billing-grid">
                 <div class="billing-box">
                     <h3>Ditagihkan Kepada:</h3>
-                    <p><?php echo $data['nama_pemesan']; ?></p>
-                    <span><?php echo $data['no_whatsapp']; ?></span>
+                    <p><?php echo htmlspecialchars($data['nama_pemesan']); ?></p>
+                    <span><?php echo htmlspecialchars($data['no_whatsapp']); ?></span>
+                    <?php if(!empty($data['email_pemesan'])) { ?>
+                    <span><i class="fas fa-envelope" style="color:#c9a66b; margin-right:4px;"></i> <?php echo htmlspecialchars($data['email_pemesan']); ?></span>
+                    <?php } ?>
                     <span>Tanggal Acara: <?php echo date('d F Y', strtotime($data['tanggal_acara'])); ?></span>
                 </div>
                 <!-- <div class="billing-box" style="text-align: right;">-->
@@ -387,10 +400,12 @@ if(isset($data['created_at']) && $data['created_at'] != "" && $data['created_at'
             </div>
             
             <?php 
-            $status_class = (strpos(strtolower($data['status_pembayaran']), 'lunas') !== false) ? 'stamp-paid' : 'stamp-pending';
+            $is_lunas = (strtolower($data['status_pembayaran']) === 'lunas');
             ?>
-            <div class="status-stamp <?php echo $status_class; ?>">
-                <?php echo strtoupper($data['status_pembayaran']); ?>
+            <div style="margin-top:30px;">
+                <div style="display:inline-flex; align-items:center; gap:10px; padding:12px 28px; border-radius:6px; font-weight:700; text-transform:uppercase; letter-spacing:2px; font-size:1rem; <?= $is_lunas ? 'background:#f0fdf4; border:2px solid #22c55e; color:#166534;' : 'background:#fff7ed; border:2px solid #f97316; color:#c2410c;' ?>">
+                    <?= $is_lunas ? '<i class="fas fa-check-circle"></i> LUNAS' : '<i class="fas fa-clock"></i> ' . strtoupper($data['status_pembayaran']) ?>
+                </div>
             </div>
             
         </div>

@@ -1,18 +1,23 @@
 <?php
-// admin_premium/api_chat.php - AJAX endpoint for CLIENT side chat
+// admin_premium/api_admin_chat.php
+// AJAX endpoint for ADMIN/STAFF side chat
 include '../config.php';
 
-if (!isset($_SESSION['klien_premium_id'])) {
+if (!isset($_SESSION['admin_id'])) {
+    http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']); exit;
 }
 
-$pesanan_id = (int)$_SESSION['klien_pesanan_id'];
-$action = $_GET['action'] ?? 'fetch';
-
 header('Content-Type: application/json');
 
+$admin_id   = (int)$_SESSION['admin_id'];
+$admin_name = mysqli_real_escape_string($conn, $_SESSION['username'] ?? 'Admin');
+$action     = $_GET['action'] ?? 'fetch';
+
 if ($action === 'fetch') {
-    $since_id = isset($_GET['since']) ? (int)$_GET['since'] : 0;
+    $pesanan_id = (int)($_GET['pid'] ?? 0);
+    $since_id   = (int)($_GET['since'] ?? 0);
+    if ($pesanan_id === 0) { echo json_encode(['status' => 'ok', 'messages' => []]); exit; }
     $q = mysqli_query($conn, "SELECT id, pengirim, nama_pengirim, pesan, gambar_path, created_at 
                               FROM pesan_proyek 
                               WHERE pesanan_id='$pesanan_id' AND id > '$since_id' 
@@ -22,8 +27,8 @@ if ($action === 'fetch') {
     echo json_encode(['status' => 'ok', 'messages' => $messages]);
 
 } elseif ($action === 'send' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $pesan = mysqli_real_escape_string($conn, trim($_POST['pesan'] ?? ''));
-    $nama  = mysqli_real_escape_string($conn, $_SESSION['klien_nama']);
+    $pesanan_id = (int)($_POST['pid'] ?? 0);
+    $pesan      = mysqli_real_escape_string($conn, trim($_POST['pesan'] ?? ''));
     $gambar_path = null;
 
     // Handle image upload
@@ -45,9 +50,11 @@ if ($action === 'fetch') {
         echo json_encode(['status' => 'error', 'message' => 'Pesan kosong']); exit;
     }
 
-    $gp_val = $gambar_path ? ("'" . mysqli_real_escape_string($conn, $gambar_path) . "'") : "NULL";
+    $gp_val = $gambar_path ? "'$gambar_path'" : "NULL";
+    $safe_gp = $gambar_path ? mysqli_real_escape_string($conn, $gambar_path) : null;
+    
     if (mysqli_query($conn, "INSERT INTO pesan_proyek (pesanan_id, pengirim, nama_pengirim, pesan, gambar_path) 
-                             VALUES ('$pesanan_id', 'klien', '$nama', '$pesan', $gp_val)")) {
+                             VALUES ('$pesanan_id', 'admin', '$admin_name', '$pesan', $gp_val)")) {
         echo json_encode(['status' => 'ok', 'gambar_path' => $gambar_path]);
     } else {
         echo json_encode(['status' => 'error', 'message' => mysqli_error($conn)]);

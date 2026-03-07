@@ -407,14 +407,16 @@ if(isset($_POST['buat_akun_premium'])) {
     $pesanan_id = (int)$_POST['pesanan_id_prem'];
     $uname = mysqli_real_escape_string($conn, trim($_POST['prem_username']));
     $pass  = md5($_POST['prem_password']);
+    $tipe  = mysqli_real_escape_string($conn, $_POST['prem_tipe'] ?? 'Premium');
+    
     // Upsert: insert or update
     $cek = mysqli_query($conn, "SELECT id FROM klien_premium WHERE pesanan_id='$pesanan_id'");
     if (mysqli_num_rows($cek) > 0) {
-        mysqli_query($conn, "UPDATE klien_premium SET username='$uname', password='$pass', is_active=1 WHERE pesanan_id='$pesanan_id'");
-        $_SESSION['notif_pesan'] = "Swal.fire('Diperbarui!', 'Akun Premium berhasil diperbarui.', 'success');";
+        mysqli_query($conn, "UPDATE klien_premium SET username='$uname', password='$pass', tipe='$tipe', is_active=1 WHERE pesanan_id='$pesanan_id'");
+        $_SESSION['notif_pesan'] = "Swal.fire('Diperbarui!', 'Akun Premium & Tier berhasil diperbarui.', 'success');";
     } else {
-        mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, created_by) VALUES ('$pesanan_id', '$uname', '$pass', '$my_id')");
-        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Akun Premium klien berhasil dibuat.', 'success');";
+        mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, tipe, created_by) VALUES ('$pesanan_id', '$uname', '$pass', '$tipe', '$my_id')");
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Akun Premium & Tier klien berhasil dibuat.', 'success');";
     }
     header("Location: admin.php?menu=premium"); exit;
 }
@@ -1217,11 +1219,22 @@ if($current_role == 'Super Admin') {
                                 <?php } ?>
                             </td>
                             <td>
-                                <?php if($is_revisi) { ?>
-                                    <span class="badge badge-red"><i class="fas fa-redo"></i> Perlu Revisi</span>
-                                <?php } else { ?>
-                                    <span class="badge badge-blue"><i class="fas fa-tools"></i> Sedang Dikerjakan</span>
-                                <?php } ?>
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    <?php if($rt['status_pengerjaan'] == 'Belum Dimulai') { ?>
+                                        <span class="badge badge-yellow"><i class="fas fa-clock"></i> Belum Dimulai</span>
+                                        <button onclick="updateProjectStatus(<?= $rt['id'] ?>, 'Sedang Dikerjakan')" class="btn-action" style="font-size:0.7rem; background:#3b82f6; color:#fff; border:none; padding:4px 8px;">
+                                            <i class="fas fa-play"></i> Mulai Kerjakan
+                                        </button>
+                                    <?php } elseif($rt['status_pengerjaan'] == 'Sedang Dikerjakan' || $rt['status_pengerjaan'] == 'Dikerjakan') { ?>
+                                        <span class="badge badge-blue"><i class="fas fa-tools"></i> Sedang Dikerjakan</span>
+                                        <span style="font-size:0.7rem; color:var(--muted); font-style:italic;">Update otomatis ke klien</span>
+                                    <?php } elseif($is_revisi) { ?>
+                                        <span class="badge badge-red"><i class="fas fa-redo"></i> Perlu Revisi</span>
+                                        <button onclick="updateProjectStatus(<?= $rt['id'] ?>, 'Sedang Dikerjakan (Revisi)')" class="btn-action" style="font-size:0.7rem; background:#f97316; color:#fff; border:none; padding:4px 8px;">
+                                            <i class="fas fa-play"></i> Mulai Revisi
+                                        </button>
+                                    <?php } ?>
+                                </div>
                             </td>
                             <td>
                                 <button type="button" onclick="openStaffUploadModal(<?= $rt['id'] ?>)" class="btn-action <?= $is_revisi ? '' : 'btn-primary' ?>" style="<?= $is_revisi ? 'background:#f97316; color:white;' : '' ?>">
@@ -1240,7 +1253,293 @@ if($current_role == 'Super Admin') {
             </div>
         </div>
 
-        <!-- Modal Upload Bukti Selesai (Staff) -->
+        <!-- ============================================================
+             STAFF: CHAT PANEL - Chat dengan Klien Premium
+        ============================================================ -->
+        <?php
+        // Ambil semua pesanan yang ada klien premium & di-assign ke staff ini
+        $q_chat_pesanan = mysqli_query($conn, "SELECT p.id, p.invoice, p.nama_pemesan, kp.id as kp_id 
+            FROM pesanan p 
+            JOIN klien_premium kp ON kp.pesanan_id = p.id AND kp.is_active = 1
+            WHERE p.admin_id = '$my_id' AND p.status_pembayaran = 'Lunas'
+            ORDER BY p.id DESC");
+        $chat_pesanan_list = [];
+        while ($cp = mysqli_fetch_assoc($q_chat_pesanan)) { $chat_pesanan_list[] = $cp; }
+        $active_chat_pid = isset($_GET['cid']) ? (int)$_GET['cid'] : (empty($chat_pesanan_list) ? 0 : $chat_pesanan_list[0]['id']);
+        $active_chat_msgs = [];
+        $active_chat_info = null;
+        $last_chat_id = 0;
+        if ($active_chat_pid > 0) {
+            foreach ($chat_pesanan_list as $cpl) { if ($cpl['id'] == $active_chat_pid) { $active_chat_info = $cpl; break; } }
+            $q_msgs = mysqli_query($conn, "SELECT id, pengirim, nama_pengirim, pesan, gambar_path, created_at FROM pesan_proyek WHERE pesanan_id='$active_chat_pid' ORDER BY id ASC LIMIT 100");
+            while ($m = mysqli_fetch_assoc($q_msgs)) { $active_chat_msgs[] = $m; $last_chat_id = $m['id']; }
+        }
+        ?>
+        <div class="card" data-aos="fade-up" data-aos-delay="350" style="margin-top:30px; overflow:visible;">
+            <div class="card-header" style="background:linear-gradient(90deg,#1A1614,#2d2520); color:#fff; border-left:4px solid #D4AF37; padding:16px 22px;">
+                <i class="fas fa-comments" style="color:#D4AF37;"></i>
+                Chat Klien Premium
+                <span style="font-size:0.8rem; font-weight:400; margin-left:8px; opacity:0.7;">Pilih klien di bawah untuk memulai percakapan</span>
+            </div>
+            <div style="display:flex; height:520px; overflow:hidden;">
+                <!-- Sidebar: Daftar Klien -->
+                <div style="width:220px; border-right:1px solid var(--border); background:#fafaf9; flex-shrink:0; overflow-y:auto;">
+                    <?php if (empty($chat_pesanan_list)): ?>
+                    <div style="padding:30px 15px; text-align:center; color:var(--muted); font-size:0.82rem;">
+                        <i class="fas fa-user-slash fa-2x" style="display:block; margin-bottom:10px; opacity:0.3;"></i>
+                        Belum ada klien premium di tugas Anda.
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($chat_pesanan_list as $cpl):
+                        $is_active_c = ($cpl['id'] == $active_chat_pid);
+                        $unread = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM pesan_proyek WHERE pesanan_id='".$cpl['id']."' AND pengirim='klien'"))['c'];
+                    ?>
+                    <a href="?menu=tugas&cid=<?= $cpl['id'] ?>" style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border); text-decoration:none; background:<?= $is_active_c ? 'var(--primary)' : 'transparent' ?>; color:<?= $is_active_c ? '#fff' : 'var(--text)' ?>; transition:0.2s;">
+                        <div style="width:38px; height:38px; border-radius:50%; background:<?= $is_active_c ? 'rgba(255,255,255,0.15)' : 'var(--primary)' ?>; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.9rem; flex-shrink:0;">
+                            <?= strtoupper(substr($cpl['nama_pemesan'], 0, 1)) ?>
+                        </div>
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?= htmlspecialchars(explode(' ', $cpl['nama_pemesan'])[0]) ?></div>
+                            <div style="font-size:0.72rem; opacity:0.7;"><?= htmlspecialchars($cpl['invoice']) ?></div>
+                        </div>
+                        <?php if ($unread > 0): ?>
+                        <div style="background:#ef4444; color:#fff; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; flex-shrink:0;"><?= $unread ?></div>
+                        <?php endif; ?>
+                    </a>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Main Chat Area -->
+                <div style="flex:1; display:flex; flex-direction:column; min-width:0; background:#fff;">
+                    <?php if ($active_chat_info): ?>
+                    <!-- Chat Header -->
+                    <div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; background:#fff; flex-shrink:0;">
+                        <div style="width:40px; height:40px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700;">
+                            <?= strtoupper(substr($active_chat_info['nama_pemesan'], 0, 1)) ?>
+                        </div>
+                        <div>
+                            <div style="font-weight:700; font-size:0.95rem;"><?= htmlspecialchars($active_chat_info['nama_pemesan']) ?></div>
+                            <div style="font-size:0.75rem; color:var(--muted);"><?= htmlspecialchars($active_chat_info['invoice']) ?> · Klien Premium</div>
+                        </div>
+                        <div style="margin-left:auto; display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#16a34a;">
+                            <span style="width:8px; height:8px; background:#16a34a; border-radius:50%; display:inline-block;"></span> Online
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="staffChatBody" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; background:linear-gradient(to bottom, #fdfcfb, #fff);">
+                        <?php if (empty($active_chat_msgs)): ?>
+                        <div style="text-align:center; padding:60px 20px; color:var(--muted);">
+                            <i class="fas fa-comment-dots fa-2x" style="display:block; margin-bottom:12px; opacity:0.3;"></i>
+                            <p style="font-size:0.88rem;">Belum ada pesan. Kirim salam ke klien!</p>
+                        </div>
+                        <?php else: ?>
+                        <?php foreach ($active_chat_msgs as $m):
+                            $is_admin = ($m['pengirim'] === 'admin');
+                            $time = date('H:i', strtotime($m['created_at']));
+                            $date = date('d M', strtotime($m['created_at']));
+                        ?>
+                        <div style="display:flex; gap:8px; flex-direction:<?= $is_admin ? 'row-reverse' : 'row' ?>; align-items:flex-end;">
+                            <div style="width:32px; height:32px; border-radius:50%; background:<?= $is_admin ? 'var(--primary)' : '#D4AF37' ?>; display:flex; align-items:center; justify-content:center; color:<?= $is_admin ? '#fff' : 'var(--primary)' ?>; font-size:0.75rem; font-weight:700; flex-shrink:0;">
+                                <?= strtoupper(substr($m['nama_pengirim'], 0, 1)) ?>
+                            </div>
+                            <div style="max-width:60%;">
+                                <?php if (!empty($m['gambar_path'])): ?>
+                                <div style="margin-bottom:4px;">
+                                    <a href="/embunvisual/<?= htmlspecialchars($m['gambar_path']) ?>" target="_blank">
+                                        <img src="/embunvisual/<?= htmlspecialchars($m['gambar_path']) ?>" style="max-width:200px; max-height:160px; border-radius:12px; border:2px solid <?= $is_admin ? 'var(--primary)' : 'var(--border)' ?>; cursor:zoom-in; display:block;">
+                                    </a>
+                                </div>
+                                <?php endif; ?>
+                                <?php if (!empty($m['pesan'])): ?>
+                                <div style="background:<?= $is_admin ? 'var(--primary)' : '#f0f0ef' ?>; color:<?= $is_admin ? '#fff' : 'var(--text)' ?>; padding:10px 14px; border-radius:16px; <?= $is_admin ? 'border-bottom-right-radius:4px;' : 'border-bottom-left-radius:4px;' ?> font-size:0.875rem; line-height:1.55; word-break:break-word;">
+                                    <?= nl2br(htmlspecialchars($m['pesan'])) ?>
+                                </div>
+                                <?php endif; ?>
+                                <div style="font-size:0.68rem; color:var(--muted); margin-top:3px; text-align:<?= $is_admin ? 'right' : 'left' ?>;">
+                                    <?= htmlspecialchars($m['nama_pengirim']) ?> · <?= $time ?>, <?= $date ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div id="staffImgPreview" style="display:none; padding:8px 16px; background:#f8f9fa; border-top:1px solid var(--border); flex-shrink:0;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <img id="staffImgThumb" style="height:50px; border-radius:6px; border:1px solid var(--border);">
+                            <span id="staffImgName" style="font-size:0.82rem; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                            <button onclick="clearStaffImg()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1rem; padding:4px;">✕</button>
+                        </div>
+                    </div>
+
+                    <!-- Emoji Picker Popup -->
+                    <div id="staffEmojiPicker" style="display:none; position:absolute; bottom:70px; left:16px; background:#fff; border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,0.12); z-index:500; width:300px;">
+                        <div style="display:grid; grid-template-columns:repeat(8,1fr); gap:4px; font-size:1.3rem; max-height:180px; overflow-y:auto;">
+                            <?php
+                            $emojis = ['😊','😂','🥰','😍','🤩','😎','🥳','🤗','😇','🙏','👍','❤️','🔥','✨','🎉','🎊','💯','🌹','🌸','🌟','💪','🤝','👏','🎵','📸','🎨','💌','📋','✅','⏰','🏃','🌙','☀️','🌈','🦋','🍀','🌺','💎','🏆','🎁','📱','💻','🔑','🎯','💰','📅','🗓️','⭐','🌿'];
+                            foreach ($emojis as $e) {
+                                echo "<button onclick=\"insertEmoji('staffChatInput','$e')\" style=\"background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;font-size:1.2rem;line-height:1;\" title=\"$e\">$e</button>";
+                            }
+                            ?>
+                        </div>
+                    </div>
+
+                    <!-- Input Bar -->
+                    <div style="padding:12px 16px; border-top:1px solid var(--border); background:#fff; flex-shrink:0; position:relative;">
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <!-- Emoji button -->
+                            <button id="staffEmojiBtn" onclick="toggleStaffEmoji(event)" title="Emoji" style="width:38px; height:38px; border-radius:50%; background:#f0f0ef; border:none; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.2s;">😊</button>
+                            <!-- Image button -->
+                            <label for="staffImageInput" title="Kirim Gambar" style="width:38px; height:38px; border-radius:50%; background:#f0f0ef; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.9rem; color:var(--muted); flex-shrink:0; transition:background 0.2s;">
+                                <i class="fas fa-image"></i>
+                            </label>
+                            <input type="file" id="staffImageInput" accept="image/*" style="display:none;" onchange="previewStaffImg(this)">
+                            <!-- Text Input -->
+                            <input type="text" id="staffChatInput" placeholder="Ketik pesan..." autocomplete="off"
+                                style="flex:1; padding:11px 18px; border:1px solid var(--border); border-radius:50px; font-size:0.9rem; outline:none; transition:all 0.25s; background:#f8f9f8;"
+                                onfocus="this.style.borderColor='var(--primary)'; this.style.background='#fff';"
+                                onblur="this.style.borderColor='var(--border)'; this.style.background='#f8f9f8';"
+                                onkeydown="if(event.key==='Enter' && !event.shiftKey){kirimStaffChat();event.preventDefault();}">
+                            <!-- Send button -->
+                            <button onclick="kirimStaffChat()" style="width:42px; height:42px; border-radius:50%; background:var(--primary); border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.95rem; flex-shrink:0; transition:background 0.25s;">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <?php else: ?>
+                    <div style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--muted); background:#fafaf9;">
+                        <i class="fas fa-comments fa-3x" style="margin-bottom:15px; opacity:0.2;"></i>
+                        <p style="font-size:0.9rem;">Pilih klien dari daftar untuk membuka chat.</p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        // ── Staff Chat Logic ──
+        const STAFF_PID      = <?= $active_chat_pid ?>;
+        const STAFF_NAME     = <?= json_encode($_SESSION['username'] ?? 'Staff') ?>;
+        let   staffLastId    = <?= $last_chat_id ?>;
+        let   staffImgFile   = null;
+
+        function scrollStaffChat() {
+            const b = document.getElementById('staffChatBody');
+            if (b) b.scrollTop = b.scrollHeight;
+        }
+        scrollStaffChat();
+
+        function insertEmoji(inputId, emoji) {
+            const inp = document.getElementById(inputId);
+            if (!inp) return;
+            const pos = inp.selectionStart;
+            inp.value = inp.value.slice(0, pos) + emoji + inp.value.slice(pos);
+            inp.selectionStart = inp.selectionEnd = pos + emoji.length;
+            inp.focus();
+            document.getElementById('staffEmojiPicker').style.display = 'none';
+        }
+
+        function toggleStaffEmoji(e) {
+            e.stopPropagation();
+            const p = document.getElementById('staffEmojiPicker');
+            p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', () => {
+            const p = document.getElementById('staffEmojiPicker');
+            if (p) p.style.display = 'none';
+        });
+
+        function previewStaffImg(input) {
+            if (input.files && input.files[0]) {
+                staffImgFile = input.files[0];
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('staffImgThumb').src = e.target.result;
+                    document.getElementById('staffImgName').textContent = staffImgFile.name;
+                    document.getElementById('staffImgPreview').style.display = 'block';
+                };
+                reader.readAsDataURL(staffImgFile);
+            }
+        }
+
+        function clearStaffImg() {
+            staffImgFile = null;
+            document.getElementById('staffImageInput').value = '';
+            document.getElementById('staffImgPreview').style.display = 'none';
+        }
+
+        function buildMsgHtml(m) {
+            const isAdmin = m.pengirim === 'admin';
+            const init = m.nama_pengirim.charAt(0).toUpperCase();
+            const t = new Date(m.created_at).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+            const d = new Date(m.created_at).toLocaleDateString('id-ID', {day:'2-digit',month:'short'});
+            const escaped = (m.pesan||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+            const imgHtml = m.gambar_path ? `<div style="margin-bottom:4px;"><a href="/embunvisual/${m.gambar_path}" target="_blank"><img src="/embunvisual/${m.gambar_path}" style="max-width:200px;max-height:160px;border-radius:12px;border:2px solid ${isAdmin?'var(--primary)':'var(--border)'};cursor:zoom-in;display:block;"></a></div>` : '';
+            const txtHtml = escaped ? `<div style="background:${isAdmin?'var(--primary)':'#f0f0ef'};color:${isAdmin?'#fff':'var(--text)'};padding:10px 14px;border-radius:16px;${isAdmin?'border-bottom-right-radius:4px;':'border-bottom-left-radius:4px;'}font-size:0.875rem;line-height:1.55;word-break:break-word;">${escaped}</div>` : '';
+            return `<div style="display:flex;gap:8px;flex-direction:${isAdmin?'row-reverse':'row'};align-items:flex-end;">
+                        <div style="width:32px;height:32px;border-radius:50%;background:${isAdmin?'var(--primary)':'#D4AF37'};display:flex;align-items:center;justify-content:center;color:${isAdmin?'#fff':'var(--primary)'};font-size:0.75rem;font-weight:700;flex-shrink:0;">${init}</div>
+                        <div style="max-width:60%;">${imgHtml}${txtHtml}<div style="font-size:0.68rem;color:var(--muted);margin-top:3px;text-align:${isAdmin?'right':'left'};">${m.nama_pengirim} · ${t}, ${d}</div></div>
+                    </div>`;
+        }
+
+        function appendStaffMsg(m) {
+            const b = document.getElementById('staffChatBody');
+            if (!b) return;
+            const empty = b.querySelector('div[style*="fa-comment-dots"]');
+            if (empty) b.innerHTML = '';
+            b.insertAdjacentHTML('beforeend', buildMsgHtml(m));
+            scrollStaffChat();
+        }
+
+        function kirimStaffChat() {
+            if (STAFF_PID === 0) return;
+            const inp = document.getElementById('staffChatInput');
+            const pesan = inp.value.trim();
+            if (!pesan && !staffImgFile) { inp.focus(); return; }
+
+            const fd = new FormData();
+            fd.append('pid', STAFF_PID);
+            fd.append('pesan', pesan);
+            if (staffImgFile) fd.append('gambar', staffImgFile);
+
+            inp.value = '';
+            clearStaffImg();
+
+            fetch('admin_premium/api_admin_chat.php?action=send', { method:'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'ok') {
+                        appendStaffMsg({
+                            id: Date.now(), pengirim:'admin', nama_pengirim: STAFF_NAME,
+                            pesan: pesan, gambar_path: d.gambar_path || null,
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                }).catch(console.error);
+        }
+
+        // Poll for new client messages every 5s
+        function pollStaffChat() {
+            if (STAFF_PID === 0) return;
+            fetch(`admin_premium/api_admin_chat.php?action=fetch&pid=${STAFF_PID}&since=${staffLastId}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'ok') {
+                        d.messages.forEach(m => {
+                            if (m.pengirim !== 'admin') { appendStaffMsg(m); }
+                            staffLastId = Math.max(staffLastId, parseInt(m.id));
+                        });
+                    }
+                }).catch(console.error);
+        }
+        setInterval(pollStaffChat, 5000);
+        </script>
+
+
         <div id="modalStaffUpload" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
             <div style="background:white; padding:30px; border-radius:15px; width:400px; max-width:90%;">
                 <h3 style="margin-bottom:20px; color:var(--text);"><i class="fas fa-cloud-upload-alt" style="color:var(--primary);"></i> Upload Bukti Selesai</h3>
@@ -1938,7 +2237,7 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             $q_prem_orders = mysqli_query($conn, "
                 SELECT p.id, p.invoice, p.nama_pemesan, p.status_pembayaran, p.status_pengerjaan, p.tanggal_acara,
                        k.nama_tema, a.username as staff_name,
-                       kp.id as kp_id, kp.username as prem_user, kp.is_active as prem_active
+                       kp.id as kp_id, kp.username as prem_user, kp.is_active as prem_active, kp.tipe as prem_tier
                 FROM pesanan p
                 LEFT JOIN katalog_tema k ON p.tema_id = k.id
                 LEFT JOIN admin_users a ON p.admin_id = a.id
@@ -1995,14 +2294,21 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                                 </td>
                                 <td>
                                     <?php if($po['kp_id']): ?>
-                                        <span class="badge badge-green"><i class="fas fa-check-circle"></i> Aktif</span><br>
+                                        <div style="display:flex; align-items:center; gap:5px; margin-bottom:5px;">
+                                            <?php if($po['prem_tier'] == 'Exclusive'): ?>
+                                                <span class="badge" style="background:linear-gradient(135deg,#D4AF37,#B8960C); color:#fff; font-size:0.65rem; border:none;"><i class="fas fa-gem"></i> Exclusive</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-yellow" style="font-size:0.65rem; border:none;"><i class="fas fa-crown"></i> Premium</span>
+                                            <?php endif; ?>
+                                            <span class="badge badge-green" style="font-size:0.65rem; border:none;"><i class="fas fa-check-circle"></i> Aktif</span>
+                                        </div>
                                         <span style="font-size:0.78rem; color:var(--muted);">User: <b><?= htmlspecialchars($po['prem_user']) ?></b></span>
                                     <?php else: ?>
                                         <span class="badge badge-yellow"><i class="fas fa-minus-circle"></i> Belum Dibuat</span>
                                     <?php endif; ?>
                                 </td>
                                 <td style="white-space:nowrap;">
-                                    <button onclick="openPremModal(<?= $po['id'] ?>, '<?= htmlspecialchars($po['invoice'], ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_user'] ?? '', ENT_QUOTES) ?>')" class="btn-action btn-primary" style="font-size:0.82rem; background:#D4AF37; border:none; margin-bottom:5px;">
+                                    <button onclick="openPremModal(<?= $po['id'] ?>, '<?= htmlspecialchars($po['invoice'], ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_user'] ?? '', ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_tier'] ?? 'Premium', ENT_QUOTES) ?>')" class="btn-action btn-primary" style="font-size:0.82rem; background:#4A5D4E; border:none; margin-bottom:5px;">
                                         <i class="fas fa-key"></i> <?= $po['kp_id'] ? 'Edit Akun' : 'Buat Akun' ?>
                                     </button>
                                     <a href="?menu=premium&pid=<?= $po['id'] ?>" class="btn-action btn-secondary" style="font-size:0.82rem; display:inline-flex;">
@@ -2079,6 +2385,14 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                 <form method="POST" action="admin.php?menu=premium">
                     <input type="hidden" name="pesanan_id_prem" id="premPesananId">
                     <div class="form-group">
+                        <label>Tipe Akun (Tier)</label>
+                        <select name="prem_tipe" id="premTipe" class="form-control" required>
+                            <option value="Premium">Standard Premium</option>
+                            <option value="Exclusive">Exclusive Tier (Gold Badge)</option>
+                        </select>
+                        <span class="text-hint">Tier menentukan badge dan fitur khusus di dashboard klien.</span>
+                    </div>
+                    <div class="form-group">
                         <label>Username Klien</label>
                         <input type="text" name="prem_username" id="premUsername" class="form-control" placeholder="contoh: romeo_juliet" required>
                         <span class="text-hint">Klien akan login dengan username ini di portal premium.</span>
@@ -2090,7 +2404,7 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                         <button type="button" onclick="closePremModal()" class="btn-action btn-secondary">Batal</button>
-                        <button type="submit" name="buat_akun_premium" class="btn-action btn-primary" style="background:#D4AF37; border:none;">
+                        <button type="submit" name="buat_akun_premium" class="btn-action btn-primary" style="background:#4A5D4E; border:none;">
                             <i class="fas fa-save"></i> Simpan Akun
                         </button>
                     </div>
@@ -2101,10 +2415,11 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             </div>
         </div>
         <script>
-        function openPremModal(id, invoice, existingUser) {
+        function openPremModal(id, invoice, existingUser, tier) {
             document.getElementById('premPesananId').value = id;
             document.getElementById('premModalInvoice').textContent = '📄 Invoice: ' + invoice;
             document.getElementById('premUsername').value = existingUser || '';
+            document.getElementById('premTipe').value = tier || 'Premium';
             document.getElementById('modalPremium').style.display = 'flex';
         }
         function closePremModal() {
@@ -2355,6 +2670,46 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             })
             .catch(error => console.log('Polling error:', error));
         }, 10000); // Check every 10 seconds
+
+        // Real-time Status Update for Staff/Admin
+        function updateProjectStatus(id, status) {
+            Swal.fire({
+                title: 'Update Status?',
+                text: `Ubah status pengerjaan menjadi "${status}"? Klien akan melihat update ini secara realtime.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: 'var(--primary)',
+                confirmButtonText: 'Ya, Update!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('pesanan_id', id);
+                    formData.append('status_baru', status);
+
+                    fetch('api_update_status.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            Swal.fire({
+                                icon: 'success', title: 'Berhasil!', text: data.message,
+                                showConfirmButton: false, timer: 1500
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire('Gagal!', data.message || 'Terjadi kesalahan sistem.', 'error');
+                        }
+                    })
+                    .catch(() => {
+                        Swal.fire('Error!', 'Gagal menghubungi server.', 'error');
+                    });
+                }
+            });
+        }
 
     </script>
 </body>

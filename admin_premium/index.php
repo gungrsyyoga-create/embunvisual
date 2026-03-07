@@ -22,9 +22,12 @@ $st_kerja   = $_SESSION['klien_status_kerja'] ?? 'Belum Dimulai';
 $st_bayar   = $_SESSION['klien_status_bayar'] ?? '-';
 $nama_staff = $_SESSION['klien_nama_staff'] ?? 'Tim Embun Visual';
 
-// Refresh status dari DB
-$q_update = mysqli_fetch_assoc(mysqli_query($conn, "SELECT status_pembayaran, status_pengerjaan FROM pesanan WHERE id='$pesanan_id'"));
+
+// Refresh status & tier dari DB
+$q_update = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.status_pembayaran, p.status_pengerjaan, p.catatan_revisi, kp.tipe as tier FROM pesanan p LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pesanan_id'"));
 if ($q_update) { $st_bayar = $q_update['status_pembayaran']; $st_kerja = $q_update['status_pengerjaan']; }
+$tier = $q_update['tier'] ?? 'Premium';
+$is_exclusive = ($tier === 'Exclusive');
 
 // Progress step mapping
 $steps = ['Belum Dimulai' => 1, 'Dikerjakan' => 2, 'Perlu Revisi' => 2, 'Menunggu Verifikasi' => 3, 'Selesai' => 4];
@@ -45,7 +48,7 @@ if ($q_rsvp_stats && mysqli_num_rows($q_rsvp_stats) > 0) {
 }
 
 // Chat messages (last 50)
-$q_chat = mysqli_query($conn, "SELECT id, pengirim, nama_pengirim, pesan, created_at FROM pesan_proyek WHERE pesanan_id='$pesanan_id' ORDER BY id ASC LIMIT 50");
+$q_chat = mysqli_query($conn, "SELECT id, pengirim, nama_pengirim, pesan, gambar_path, created_at FROM pesan_proyek WHERE pesanan_id='$pesanan_id' ORDER BY id ASC LIMIT 50");
 $messages = [];
 $last_msg_id = 0;
 while ($row = mysqli_fetch_assoc($q_chat)) { $messages[] = $row; $last_msg_id = $row['id']; }
@@ -254,6 +257,15 @@ $hitung_mundur = max(0, (int)$diff);
         <div class="client-badge">
             <div class="name"><?= htmlspecialchars($nama) ?></div>
             <div class="inv"><?= htmlspecialchars($invoice) ?></div>
+            <?php if ($is_exclusive): ?>
+            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:linear-gradient(135deg,#D4AF37,#B8960C); color:#fff; padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:700; letter-spacing:1px;">
+                <i class="fas fa-gem" style="font-size:0.65rem;"></i> EXCLUSIVE
+            </div>
+            <?php else: ?>
+            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:var(--primary); color:#fff; padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:700; letter-spacing:1px;">
+                <i class="fas fa-crown" style="font-size:0.65rem;"></i> PREMIUM
+            </div>
+            <?php endif; ?>
         </div>
         <nav>
             <a class="nav-item active" onclick="showSection('beranda', this)">
@@ -268,6 +280,11 @@ $hitung_mundur = max(0, (int)$diff);
             <a class="nav-item" onclick="showSection('detail', this)">
                 <i class="fas fa-file-invoice"></i> Detail Pesanan
             </a>
+            <?php if ($is_exclusive): ?>
+            <a class="nav-item" onclick="showSection('exclusive', this)" style="color:#D4AF37; background:rgba(212,175,55,0.08);">
+                <i class="fas fa-gem"></i> Exclusive Perks
+            </a>
+            <?php endif; ?>
         </nav>
         <div class="sidebar-footer">
             <a href="?logout=true" class="logout-btn" onclick="return confirm('Yakin ingin keluar?')">
@@ -439,7 +456,7 @@ $hitung_mundur = max(0, (int)$diff);
             </div>
         </div>
 
-        <!-- SECTION: CHAT -->
+                <!-- SECTION: CHAT -->
         <div id="sec-chat" class="section">
             <div class="page-header">
                 <h1>Chat dengan Tim</h1>
@@ -449,7 +466,7 @@ $hitung_mundur = max(0, (int)$diff);
                 <div class="card-header">
                     <h3><i class="fas fa-user-headset"></i> Tim: <?= htmlspecialchars($nama_staff) ?></h3>
                     <div style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #16a34a;">
-                        <span style="width: 8px; height: 8px; background: #16a34a; border-radius: 50; display: inline-block; border-radius: 50%;"></span> Online
+                        <span style="width: 8px; height: 8px; background: #16a34a; border-radius: 50%; display: inline-block;"></span> Online
                     </div>
                 </div>
                 <div class="chat-body">
@@ -460,7 +477,7 @@ $hitung_mundur = max(0, (int)$diff);
                             Belum ada percakapan. Mulailah dengan menyapa tim kami!
                         </div>
                         <?php else: ?>
-                            <?php foreach ($messages as $m): 
+                            <?php foreach ($messages as $m):
                                 $is_client = $m['pengirim'] === 'klien';
                                 $initials = strtoupper(substr($m['nama_pengirim'], 0, 1));
                                 $time = date('H:i', strtotime($m['created_at']));
@@ -468,14 +485,51 @@ $hitung_mundur = max(0, (int)$diff);
                             <div class="msg-wrap <?= $is_client ? 'client' : 'admin' ?>">
                                 <div class="msg-avatar <?= $is_client ? 'client-av' : 'admin-av' ?>"><?= $initials ?></div>
                                 <div>
+                                    <?php if (!empty($m['gambar_path'])): ?>
+                                    <div style="margin-bottom:4px;">
+                                        <a href="/embunvisual/<?= htmlspecialchars($m['gambar_path']) ?>" target="_blank">
+                                            <img src="/embunvisual/<?= htmlspecialchars($m['gambar_path']) ?>" style="max-width:200px; max-height:150px; border-radius:12px; display:block; border:2px solid <?= $is_client ? 'var(--gold)' : 'var(--primary)' ?>;">
+                                        </a>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($m['pesan'])): ?>
                                     <div class="msg-bubble"><?= nl2br(htmlspecialchars($m['pesan'])) ?></div>
+                                    <?php endif; ?>
                                     <div class="msg-meta"><?= htmlspecialchars($m['nama_pengirim']) ?> · <?= $time ?></div>
                                 </div>
                             </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
-                    <div class="chat-input-bar">
+
+                    <!-- Image Preview Strip -->
+                    <div id="clientImgPreview" style="display:none; padding:8px 16px; background:#fdf8f0; border-top:1px solid var(--border); flex-shrink:0;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <img id="clientImgThumb" style="height:45px; border-radius:8px; border:1px solid var(--border);">
+                            <span id="clientImgName" style="font-size:0.82rem; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                            <button onclick="clearClientImg()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1rem;">✕</button>
+                        </div>
+                    </div>
+
+                    <!-- Emoji Picker -->
+                    <div id="clientEmojiPicker" style="display:none; position:absolute; bottom:70px; left:16px; background:#fff; border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,0.1); z-index:500; width:290px;">
+                        <div style="display:grid; grid-template-columns:repeat(8,1fr); gap:4px; max-height:160px; overflow-y:auto;">
+                            <?php
+                            $emojis = ['😊','😂','🥰','😍','🤩','😎','🥳','🤗','😇','🙏','👍','❤️','🔥','✨','🎉','🎊','💯','🌹','🌸','🌟','💪','🤝','👏','🎵','📸','🎨','💌','📋','✅','⏰','🏃','🌙','☀️','🌈','🦋','🍀','🌺','💎','🏆','🎁','📱','💻','🔑','🎯','💰','📅','🗓️','⭐','🌿'];
+                            foreach ($emojis as $e) {
+                                echo "<button onclick=\"addEmoji('$e')\" style=\"background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;font-size:1.2rem;line-height:1;\">$e</button>";
+                            }
+                            ?>
+                        </div>
+                    </div>
+
+                    <!-- Input Bar -->
+                    <div class="chat-input-bar" style="position:relative;">
+                        <button onclick="toggleClientEmoji(event)" title="Emoji" style="width:40px; height:40px; border-radius:50%; background:var(--bg); border:1px solid var(--border); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; flex-shrink:0;">😊</button>
+                        <label for="clientImageInput" title="Kirim Gambar" style="width:40px; height:40px; border-radius:50%; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); font-size:0.9rem; flex-shrink:0;">
+                            <i class="fas fa-image"></i>
+                        </label>
+                        <input type="file" id="clientImageInput" accept="image/*" style="display:none;" onchange="previewClientImg(this)">
                         <input type="text" class="chat-input" id="chatInput" placeholder="Ketik pesan..." onkeydown="if(event.key==='Enter' && !event.shiftKey){kirimPesan();event.preventDefault();}">
                         <button class="chat-send" onclick="kirimPesan()">
                             <i class="fas fa-paper-plane"></i>
@@ -509,6 +563,48 @@ $hitung_mundur = max(0, (int)$diff);
             </div>
         </div>
 
+        <!-- SECTION: EXCLUSIVE PERKS (only for Exclusive tier) -->
+        <?php if ($is_exclusive): ?>
+        <div id="sec-exclusive" class="section">
+            <div class="page-header">
+                <h1><i class="fas fa-gem" style="color:#D4AF37;"></i> Exclusive Perks</h1>
+                <p>Nikmati layanan exclusive yang kami siapkan spesial untuk Anda.</p>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:20px;">
+                <?php
+                $perks = [
+                    ['fas fa-headset', 'Dedicated Support 24/7', 'Akses langsung ke tim senior Embun Visual kapan saja Anda butuhkan.', '#D4AF37'],
+                    ['fas fa-palette', 'Unlimited Revisi', 'Tidak ada batasan jumlah revisi. Kami kerjakan sampai sempurna.', '#7C3AED'],
+                    ['fas fa-film', 'Video Preview Animasi', 'Dapatkan video preview undangan digital sebelum dikirimkan ke tamu.', '#0284C7'],
+                    ['fas fa-qrcode', 'QR Code Tamu Premium', 'Setiap tamu mendapat QR code akses VIP dengan nama personal.', '#059669'],
+                    ['fas fa-gift', 'Digital Gift Book', 'Buku tamu digital interaktif dengan galeri foto & ucapan.', '#DC2626'],
+                    ['fas fa-crown', 'Priority Processing', 'Pesanan Anda diprioritaskan oleh tim kami di atas antrian lainnya.', '#B7791F'],
+                ];
+                foreach ($perks as $p): ?>
+                <div class="card" style="padding:25px; border-top:3px solid <?= $p[3] ?>;">
+                    <div style="width:50px; height:50px; border-radius:14px; background:<?= $p[3] ?>22; display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
+                        <i class="<?= $p[0] ?>" style="font-size:1.3rem; color:<?= $p[3] ?>;"></i>
+                    </div>
+                    <h3 style="font-family:var(--serif); font-style:italic; color:var(--primary); margin-bottom:8px; font-size:1.05rem;"><?= $p[1] ?></h3>
+                    <p style="font-size:0.85rem; color:var(--muted); line-height:1.6;"><?= $p[2] ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="card" style="margin-top:25px; padding:25px; background:linear-gradient(135deg,#1A1614,#2d2520); color:#fff; border:none;">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <i class="fas fa-gem" style="font-size:2rem; color:#D4AF37;"></i>
+                    <div>
+                        <h3 style="color:#D4AF37; font-family:var(--serif); font-style:italic; margin-bottom:5px;">Anda adalah Klien Exclusive Kami</h3>
+                        <p style="font-size:0.85rem; opacity:0.8;">Terima kasih telah mempercayakan momen spesial Anda kepada Embun Visual. Tim kami berkomitmen memberikan yang terbaik.</p>
+                    </div>
+                    <button onclick="showSection('chat', document.querySelectorAll('.nav-item')[2])" style="padding:12px 22px; border-radius:30px; border:none; background:#D4AF37; color:#1A1614; font-weight:700; cursor:pointer; white-space:nowrap; font-size:0.88rem; margin-left:auto; flex-shrink:0;">
+                        <i class="fas fa-comments"></i> Hubungi Tim
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
     </main>
 
     <script>
@@ -521,59 +617,153 @@ $hitung_mundur = max(0, (int)$diff);
             if (name === 'chat') scrollChatBottom();
         }
 
-        // ── Chat Polling ──
+        // ── Real-time Status Polling ──
+        const STATUS_STEPS = {
+            'Belum Dimulai': 1, 
+            'Sedang Dikerjakan': 2, 'Dikerjakan': 2, 'Sedang Dikerjakan (Revisi)': 2,
+            'Perlu Revisi': 2, 
+            'Menunggu Verifikasi': 3, 
+            'Selesai': 4
+        };
+        let currentStatusKerja = <?= json_encode($st_kerja) ?>;
+
+        function updateProgressUI(newStatus) {
+            const stepNum = STATUS_STEPS[newStatus] || 1;
+            document.querySelectorAll('.step-item').forEach((el, i) => {
+                const num = i + 1;
+                const circle = el.querySelector('.step-circle');
+                const line = el.querySelector('.step-line');
+                const label = el.querySelector('.step-label');
+
+                if (circle) {
+                    circle.className = 'step-circle ' + (num < stepNum ? 'done' : (num === stepNum ? 'active' : ''));
+                    if (num < stepNum) circle.innerHTML = '<i class="fas fa-check"></i>';
+                }
+                if (line) {
+                    line.className = 'step-line ' + (num < stepNum ? 'done' : '');
+                }
+                if (label) {
+                    label.className = 'step-label ' + (num === stepNum ? 'active-label' : '');
+                    // Only move the "Saat ini" text if it's the current step
+                    if (num === stepNum) {
+                        if (!label.innerHTML.includes('Saat ini')) {
+                            label.innerHTML += '<br><small style="color: var(--gold); font-weight: 700;">← Saat ini</small>';
+                        }
+                    } else {
+                        label.innerHTML = label.innerHTML.replace('<br><small style="color: var(--gold); font-weight: 700;">← Saat ini</small>', '');
+                    }
+                }
+            });
+        }
+
+        function pollStatus() {
+            fetch('api_status.php')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'ok' && d.status_pengerjaan !== currentStatusKerja) {
+                        const oldStatus = currentStatusKerja;
+                        currentStatusKerja = d.status_pengerjaan;
+                        updateProgressUI(currentStatusKerja);
+                        // Toast notification (Using SweetAlert2 which is included)
+                        Swal.fire({
+                            toast: true, position: 'top-end', icon: 'info',
+                            title: 'Status diperbarui!',
+                            text: `"${oldStatus}" → "${currentStatusKerja}"`,
+                            showConfirmButton: false, timer: 5000, timerProgressBar: true
+                        });
+                    }
+                }).catch(() => {});
+        }
+        setInterval(pollStatus, 15000);
+
+        // ── Chat ──
         let lastId = <?= $last_msg_id ?>;
-        const pesananId = <?= $pesanan_id ?>;
         const myName = <?= json_encode($nama) ?>;
+        let clientImgFile = null;
 
         function scrollChatBottom() {
             const cb = document.getElementById('chatBody');
             if (cb) cb.scrollTop = cb.scrollHeight;
         }
 
+        function addEmoji(emoji) {
+            const inp = document.getElementById('chatInput');
+            if (!inp) return;
+            const pos = inp.selectionStart;
+            inp.value = inp.value.slice(0, pos) + emoji + inp.value.slice(pos);
+            inp.selectionStart = inp.selectionEnd = pos + emoji.length;
+            inp.focus();
+            document.getElementById('clientEmojiPicker').style.display = 'none';
+        }
+
+        function toggleClientEmoji(e) {
+            e.stopPropagation();
+            const p = document.getElementById('clientEmojiPicker');
+            p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', () => {
+            const p = document.getElementById('clientEmojiPicker');
+            if (p) p.style.display = 'none';
+        });
+
+        function previewClientImg(input) {
+            if (input.files && input.files[0]) {
+                clientImgFile = input.files[0];
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('clientImgThumb').src = e.target.result;
+                    document.getElementById('clientImgName').textContent = clientImgFile.name;
+                    document.getElementById('clientImgPreview').style.display = 'block';
+                };
+                reader.readAsDataURL(clientImgFile);
+            }
+        }
+
+        function clearClientImg() {
+            clientImgFile = null;
+            document.getElementById('clientImageInput').value = '';
+            document.getElementById('clientImgPreview').style.display = 'none';
+        }
+
+        function buildClientMsg(m, isClient) {
+            const init = m.nama_pengirim.charAt(0).toUpperCase();
+            const time = new Date(m.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+            const escaped = (m.pesan||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+            const imgHtml = m.gambar_path ? `<div style="margin-bottom:4px;"><a href="/embunvisual/${m.gambar_path}" target="_blank"><img src="/embunvisual/${m.gambar_path}" style="max-width:200px;max-height:150px;border-radius:12px;display:block;border:2px solid ${isClient?'var(--gold)':'var(--primary)'};"></a></div>` : '';
+            const txtHtml = escaped ? `<div class="msg-bubble">${escaped}</div>` : '';
+            return `<div class="msg-wrap ${isClient?'client':'admin'}">
+                <div class="msg-avatar ${isClient?'client-av':'admin-av'}">${init}</div>
+                <div>${imgHtml}${txtHtml}<div class="msg-meta">${m.nama_pengirim} · ${time}</div></div>
+            </div>`;
+        }
+
         function appendMessage(m) {
             const cb = document.getElementById('chatBody');
             const emptyEl = cb.querySelector('.chat-empty');
             if (emptyEl) emptyEl.remove();
-
             const isClient = m.pengirim === 'klien';
-            const initials = m.nama_pengirim.charAt(0).toUpperCase();
-            const time = new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            const escaped = m.pesan.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-
-            cb.insertAdjacentHTML('beforeend', `
-                <div class="msg-wrap ${isClient ? 'client' : 'admin'}">
-                    <div class="msg-avatar ${isClient ? 'client-av' : 'admin-av'}">${initials}</div>
-                    <div>
-                        <div class="msg-bubble">${escaped}</div>
-                        <div class="msg-meta">${m.nama_pengirim} · ${time}</div>
-                    </div>
-                </div>
-            `);
+            cb.insertAdjacentHTML('beforeend', buildClientMsg(m, isClient));
             scrollChatBottom();
         }
 
         function kirimPesan() {
             const input = document.getElementById('chatInput');
             const pesan = input.value.trim();
-            if (!pesan) return;
-            input.value = '';
+            if (!pesan && !clientImgFile) { input.focus(); return; }
 
-            fetch('api_chat.php?action=send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'pesan=' + encodeURIComponent(pesan)
-            }).then(r => r.json()).then(d => {
-                if (d.status === 'ok') {
-                    appendMessage({
-                        id: Date.now(),
-                        pengirim: 'klien',
-                        nama_pengirim: myName,
-                        pesan: pesan,
-                        created_at: new Date().toISOString()
-                    });
-                }
-            }).catch(err => console.error(err));
+            const fd = new FormData();
+            fd.append('pesan', pesan);
+            if (clientImgFile) fd.append('gambar', clientImgFile);
+            input.value = '';
+            clearClientImg();
+
+            fetch('api_chat.php?action=send', { method:'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'ok') {
+                        appendMessage({ pengirim:'klien', nama_pengirim: myName, pesan: pesan, gambar_path: d.gambar_path || null, created_at: new Date().toISOString() });
+                    }
+                }).catch(console.error);
         }
 
         function pollMessages() {
@@ -582,19 +772,13 @@ $hitung_mundur = max(0, (int)$diff);
                 .then(d => {
                     if (d.status === 'ok' && d.messages.length > 0) {
                         d.messages.forEach(m => {
-                            if (m.pengirim !== 'klien') {
-                                appendMessage(m);
-                            }
+                            if (m.pengirim !== 'klien') { appendMessage(m); }
                             lastId = Math.max(lastId, parseInt(m.id));
                         });
                     }
-                }).catch(err => console.error(err));
+                }).catch(console.error);
         }
-
-        // Poll every 5 seconds for new admin messages
         setInterval(pollMessages, 5000);
-
-        // Scroll on load
         scrollChatBottom();
     </script>
 </body>

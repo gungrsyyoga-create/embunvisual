@@ -753,6 +753,10 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                     
                     <div class="c-actions">
                         <a href="<?php echo htmlspecialchars(trim($tema['slug_demo'])); ?>" target="_blank" class="btn-outline"><?= $txt['cat_btn_demo'] ?></a>
+                        <button onclick="bukaCustomizer('<?php echo htmlspecialchars(trim($tema['slug_demo']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars($tema['nama_tema'], ENT_QUOTES); ?>')"
+                            class="btn-outline" style="background:linear-gradient(135deg,#1A1614,#2d2520);color:#D4AF37;border-color:#D4AF37;gap:6px;" title="Live Preview Customizer">
+                            <i class="fas fa-palette"></i> Customize
+                        </button>
                         <button onclick="bukaModal('<?php echo $tema['id']; ?>', '<?php echo htmlspecialchars($tema['nama_tema'], ENT_QUOTES); ?>', '<?php echo $tema['harga']; ?>')" class="btn-solid"><?= $txt['cat_btn_book'] ?></button>
                     </div>
                 </div>
@@ -1024,5 +1028,267 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     </script>
+<!-- ============================================================
+     🎨 CUSTOMIZER TEMA — LIVE PREVIEW MODAL
+============================================================ -->
+<div id="customizerModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9000; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px);">
+    <div style="display:flex; height:100%; overflow:hidden;">
+
+        <!-- Panel Kiri: Controls -->
+        <div id="custPane" style="width:300px; min-width:300px; background:#1A1614; color:#eee; overflow-y:auto; display:flex; flex-direction:column; box-shadow:4px 0 30px rgba(0,0,0,0.4);">
+            <!-- Header -->
+            <div style="padding:22px 22px 16px; border-bottom:1px solid rgba(212,175,55,0.2);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-palette" style="color:#D4AF37; font-size:1.2rem;"></i>
+                        <span style="font-weight:700; font-size:1rem; color:#fff;">Live Customizer</span>
+                    </div>
+                    <button onclick="tutupCustomizer()" style="background:rgba(255,255,255,0.08); border:none; color:#aaa; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">&times;</button>
+                </div>
+                <div id="custTemaName" style="font-size:0.78rem; color:#D4AF37; font-style:italic;"></div>
+            </div>
+
+            <!-- Controls -->
+            <div style="padding:20px; flex:1;">
+
+                <!-- Warna Utama -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">🎨 Warna Utama</label>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                        <?php
+                        $colorPresets = [
+                            ['#C05C47','Terracotta'],['#2D6A4F','Emerald'],['#1A365D','Navy'],
+                            ['#744210','Choco'],['#702459','Maroon'],['#1B4332','Forest'],
+                            ['#B7791F','Antique Gold'],['#553C9A','Regal'],['#C05299','Rose'],
+                        ];
+                        foreach ($colorPresets as $cp) {
+                            echo "<button onclick=\"setCustVar('--primary','".$cp[0]."'); setCustVar('--primary-dark','".$cp[0]."')\" "
+                               . "style=\"width:32px;height:32px;border-radius:50%;background:".$cp[0].";"
+                               . "border:3px solid transparent;cursor:pointer;transition:0.2s;\" "
+                               . "title=\"".$cp[1]."\" onmouseover=\"this.style.borderColor='#D4AF37'\" onmouseout=\"this.style.borderColor='transparent'\""
+                               . "></button>";
+                        }
+                        ?>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="color" id="custColorPrimary" value="#C05C47" onchange="setCustVar('--primary', this.value); setCustVar('--primary-dark', this.value);"
+                            style="width:44px; height:36px; border:none; border-radius:8px; cursor:pointer; padding:2px; background:transparent;">
+                        <span style="font-size:0.82rem; color:#aaa;">Pilih warna custom</span>
+                    </div>
+                </div>
+
+                <!-- Background -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">🏠 Warna Latar</label>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                        <?php
+                        $bgPresets = [['#FFFDFB','Cream'],['#FFFFFF','White'],['#F5F0EB','Sand'],['#FFF8F0','Peach'],['#F0F4F8','Ice Blue'],['#1A1614','Dark'],['#1A2038','Midnight']];
+                        foreach ($bgPresets as $bp) {
+                            echo "<button onclick=\"setCustVar('--bg-main','".$bp[0]."')\" "
+                               . "style=\"width:32px;height:32px;border-radius:50%;background:".$bp[0].";"
+                               . "border:3px solid rgba(255,255,255,0.2);cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,0.2);transition:0.2s;\""
+                               . "title=\"".$bp[1]."\" onmouseover=\"this.style.borderColor='#D4AF37'\" onmouseout=\"this.style.borderColor='rgba(255,255,255,0.2)'\""
+                               . "></button>";
+                        }
+                        ?>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="color" id="custColorBg" value="#FFFDFB" onchange="setCustVar('--bg-main', this.value); setCustVar('--bg-card', this.value);"
+                            style="width:44px; height:36px; border:none; border-radius:8px; cursor:pointer; padding:2px; background:transparent;">
+                        <span style="font-size:0.82rem; color:#aaa;">Pilih warna custom</span>
+                    </div>
+                </div>
+
+                <!-- Font -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">✍️ Gaya Font Judul</label>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <?php
+                        $fonts = [['Playfair Display','Playfair'],['Lora','Lora'],['Great Vibes','Great Vibes (Kaligrafi)'],['Cormorant Garamond','Cormorant'],['Cinzel','Cinzel (Klasik)']];
+                        foreach($fonts as $f) {
+                            echo "<button onclick=\"setCustFont('".$f[0]."')\" style=\"padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#eee;cursor:pointer;font-family:'".$f[0]."',serif;font-size:1rem;text-align:left;transition:0.2s;\" onmouseover=\"this.style.background='rgba(212,175,55,0.15)'\" onmouseout=\"this.style.background='rgba(255,255,255,0.05)'\">"
+                               . $f[1]."</button>";
+                        }
+                        ?>
+                    </div>
+                </div>
+
+                <!-- Ukuran Font -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:8px;">🔤 Ukuran Font Hero</label>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <input type="range" id="custFontSize" min="2" max="7" step="0.5" value="5"
+                            oninput="setCustVar('--hero-fs', this.value+'rem'); document.getElementById('fsSizeLabel').textContent=this.value+'rem';"
+                            style="flex:1; accent-color:#D4AF37;">
+                        <span id="fsSizeLabel" style="font-size:0.82rem; color:#D4AF37; min-width:40px;">5rem</span>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div style="margin-top:30px; display:flex; flex-direction:column; gap:10px;">
+                    <button onclick="resetCustomizer()" style="padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; cursor:pointer; font-size:0.88rem; transition:0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-undo"></i> Reset Default</button>
+                    <button onclick="hubungiAdmin()" style="padding:12px; border-radius:10px; border:none; background:linear-gradient(135deg,#25D366,#128C7E); color:#fff; cursor:pointer; font-size:0.88rem; font-weight:600;"><i class="fab fa-whatsapp"></i> Pesan Tema Ini</button>
+                </div>
+
+                <div style="margin-top:20px; padding:14px; background:rgba(212,175,55,0.08); border-radius:10px; border:1px solid rgba(212,175,55,0.2); font-size:0.78rem; color:#c4a84f; line-height:1.6;">
+                    <i class="fas fa-info-circle"></i> Ini adalah <strong>preview visual</strong>. Warna & font final akan dikustomisasi oleh tim kami sesuai request setelah pemesanan.
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Kanan: iFrame Preview -->
+        <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:12px 18px; background:rgba(0,0,0,0.5); display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0;">
+                <div style="display:flex; gap:6px;">
+                    <div style="width:12px;height:12px;border-radius:50%;background:#ef4444;"></div>
+                    <div style="width:12px;height:12px;border-radius:50%;background:#f59e0b;"></div>
+                    <div style="width:12px;height:12px;border-radius:50%;background:#22c55e;"></div>
+                </div>
+                <div style="flex:1; background:rgba(255,255,255,0.07); border-radius:6px; padding:5px 12px; font-size:0.78rem; color:#aaa; font-family:monospace;" id="custIframeUrl">Loading preview...</div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="setDevice('mobile')" id="btnMob" title="Mobile" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#aaa;cursor:pointer;font-size:0.8rem;transition:0.2s;"><i class="fas fa-mobile-alt"></i></button>
+                    <button onclick="setDevice('desktop')" id="btnDesk" title="Desktop" style="padding:6px 12px;border-radius:6px;border:none;background:#D4AF37;color:#1A1614;cursor:pointer;font-size:0.8rem;font-weight:700;transition:0.2s;"><i class="fas fa-desktop"></i></button>
+                </div>
+            </div>
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; background:#0a0a0a; overflow:hidden;">
+                <div id="iframeWrapper" style="width:100%; height:100%; transition:all 0.4s cubic-bezier(0.4,0,0.2,1); display:flex; align-items:flex-start; justify-content:center;">
+                    <iframe id="custIframe"
+                        style="width:100%; height:100%; border:none; border-radius:0; background:#fff;"
+                        src="about:blank"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Customizer Logic ──
+let custDemoUrl = '';
+let custTemaNama = '';
+let custIframeReady = false;
+let custPendingVars = {};
+
+function bukaCustomizer(url, nama) {
+    custDemoUrl = url;
+    custTemaNama = nama;
+    custIframeReady = false;
+    custPendingVars = {};
+    const modal = document.getElementById('customizerModal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    document.getElementById('custTemaName').textContent = '🎨 ' + nama;
+    document.getElementById('custIframeUrl').textContent = url;
+    const iframe = document.getElementById('custIframe');
+    iframe.src = url;
+    iframe.onload = () => {
+        custIframeReady = true;
+        // Apply any pending vars
+        Object.entries(custPendingVars).forEach(([k,v]) => sendToIframe(k, v));
+        custPendingVars = {};
+    };
+}
+
+function tutupCustomizer() {
+    document.getElementById('customizerModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    const iframe = document.getElementById('custIframe');
+    iframe.src = 'about:blank';
+    custIframeReady = false;
+}
+
+function sendToIframe(varName, value) {
+    const iframe = document.getElementById('custIframe');
+    try {
+        iframe.contentDocument.documentElement.style.setProperty(varName, value);
+    } catch(e) {
+        // Cross-origin fallback: postMessage
+        iframe.contentWindow.postMessage({ type: 'setCSSVar', varName, value }, '*');
+    }
+}
+
+function setCustVar(varName, value) {
+    if (custIframeReady) {
+        sendToIframe(varName, value);
+    } else {
+        custPendingVars[varName] = value;
+    }
+}
+
+function setCustFont(fontName) {
+    // Inject Google Font dynamically then set --font-serif
+    const iframe = document.getElementById('custIframe');
+    const fontSlug = fontName.replace(/ /g, '+');
+    try {
+        const doc = iframe.contentDocument;
+        let existing = doc.querySelector('#cust-font-link');
+        if (existing) existing.remove();
+        const link = doc.createElement('link');
+        link.id = 'cust-font-link';
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${fontSlug}:ital,wght@0,400;1,400&display=swap`;
+        doc.head.appendChild(link);
+    } catch(e) {}
+    setCustVar('--font-serif', `'${fontName}', serif`);
+}
+
+function resetCustomizer() {
+    setCustVar('--primary', '#C05C47');
+    setCustVar('--primary-dark', '#8B3A2B');
+    setCustVar('--bg-main', '#FFFDFB');
+    setCustVar('--bg-card', '#FFFFFF');
+    setCustVar('--font-serif', "'Lora', serif");
+    document.getElementById('custColorPrimary').value = '#C05C47';
+    document.getElementById('custColorBg').value = '#FFFDFB';
+    document.getElementById('custFontSize').value = '5';
+    document.getElementById('fsSizeLabel').textContent = '5rem';
+}
+
+function setDevice(device) {
+    const wrapper = document.getElementById('iframeWrapper');
+    const iframe = document.getElementById('custIframe');
+    const btnMob = document.getElementById('btnMob');
+    const btnDesk = document.getElementById('btnDesk');
+    if (device === 'mobile') {
+        wrapper.style.alignItems = 'flex-start';
+        wrapper.style.padding = '20px 0';
+        iframe.style.width = '390px';
+        iframe.style.height = '844px';
+        iframe.style.borderRadius = '20px';
+        iframe.style.boxShadow = '0 30px 80px rgba(0,0,0,0.5)';
+        btnMob.style.background = '#D4AF37';
+        btnMob.style.color = '#1A1614';
+        btnMob.style.border = 'none';
+        btnDesk.style.background = 'rgba(255,255,255,0.06)';
+        btnDesk.style.color = '#aaa';
+        btnDesk.style.border = '1px solid rgba(255,255,255,0.15)';
+    } else {
+        wrapper.style.padding = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.borderRadius = '0';
+        iframe.style.boxShadow = 'none';
+        btnDesk.style.background = '#D4AF37';
+        btnDesk.style.color = '#1A1614';
+        btnDesk.style.border = 'none';
+        btnMob.style.background = 'rgba(255,255,255,0.06)';
+        btnMob.style.color = '#aaa';
+        btnMob.style.border = '1px solid rgba(255,255,255,0.15)';
+    }
+}
+
+function hubungiAdmin() {
+    const msg = encodeURIComponent(`Halo Embun Visual! Saya tertarik dengan tema *${custTemaNama}*. Bisa minta info lebih lanjut?`);
+    window.open('https://wa.me/?text=' + msg, '_blank');
+}
+
+// Close on backdrop click
+document.getElementById('customizerModal').addEventListener('click', function(e) {
+    if (e.target === this) tutupCustomizer();
+});
+// Close on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupCustomizer(); });
+</script>
 </body>
 </html>

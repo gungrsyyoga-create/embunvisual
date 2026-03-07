@@ -1,0 +1,3 @@
+# Proteksi folder includes — tidak bisa diakses langsung dari browser
+Order deny,allow
+Deny from all

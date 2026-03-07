@@ -16,7 +16,8 @@ $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
 $adminFilterStatAnd = ($current_role != 'Super Admin') ? "AND admin_id='$my_id'" : "";
 
 // Count pending orders
-$q_pesanan = mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi' $adminFilterStatAnd");
+$statusFilterNotif = ($current_role == 'Super Admin') ? "(status_pembayaran='Menunggu Konfirmasi' OR status_pengerjaan='Menunggu Verifikasi')" : "status_pembayaran='Menunggu Konfirmasi'";
+$q_pesanan = mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE $statusFilterNotif $adminFilterStatAnd");
 $jml_menunggu = 0;
 if($q_pesanan) {
     $row = mysqli_fetch_assoc($q_pesanan);

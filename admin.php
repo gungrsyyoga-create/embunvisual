@@ -63,34 +63,11 @@ if(isset($_POST['update_status_pesanan'])){
     
     // Cek apakah statusnya benar berubah, jika sama tidak perlu dilog
     if($status_baru != $status_awal) {
-        
-        // Proses upload Bukti Selesai Tugas jika Lunas
-        if($status_baru == 'Lunas' && isset($_FILES['bukti_selesai']['name']) && $_FILES['bukti_selesai']['name'] != '') {
-            $nama_file = $_FILES['bukti_selesai']['name'];
-            $tmp_file = $_FILES['bukti_selesai']['tmp_name'];
-            $ext = strtolower(pathinfo($nama_file, PATHINFO_EXTENSION));
-            $allowed = array('jpg','jpeg','png','webp');
-            
-            if(in_array($ext, $allowed)){
-                $new_name = 'bukti_'.$id_pesanan.'_'.time().'.'.$ext;
-                $upload_dir = 'uploads/audit/';
-                if(!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
-                $upload_path = $upload_dir.$new_name;
-                
-                if(move_uploaded_file($tmp_file, $upload_path)){
-                    $foto_path = $upload_path;
-                }
-            } else {
-                $_SESSION['notif_pesan'] = "Swal.fire('Gagal!', 'Format foto bukti harus JPG/PNG/WEBP.', 'error');";
-                header("Location: admin.php?menu=pesanan"); exit;
-            }
-        }
-
         if(mysqli_query($conn, "UPDATE pesanan SET status_pembayaran='$status_baru' WHERE id='$id_pesanan'")){
             // Log activity
             $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
             $ket_log = "Mengubah status pembayaran dari [$status_awal] menjadi [$status_baru]";
-            catatLog($conn, $my_id_log, 'Update Pesanan', $invoice_lama, $ket_log, $foto_path);
+            catatLog($conn, $my_id_log, 'Update Pesanan', $invoice_lama, $ket_log, null);
             
             $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
             header("Location: admin.php?menu=pesanan"); exit;
@@ -99,6 +76,57 @@ if(isset($_POST['update_status_pesanan'])){
         // Status tidak berubah, lempar kembali
         $_SESSION['notif_pesan'] = "Swal.fire('Info', 'Status pembayaran tidak ada yang berubah.', 'info');";
         header("Location: admin.php?menu=pesanan"); exit;
+    }
+}
+
+// A1. Staff Upload Tugas Selesai
+if(isset($_POST['update_tugas_selesai'])){
+    $id_pesanan = (int)$_POST['id_pesanan'];
+    $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice, status_pengerjaan FROM pesanan WHERE id='$id_pesanan'"));
+    $invoice_lama = $dt_lama['invoice'];
+    $status_awal = $dt_lama['status_pengerjaan'];
+    $foto_path = null;
+    
+    // Proses upload Bukti Selesai Tugas
+    if(isset($_FILES['bukti_selesai']['name']) && $_FILES['bukti_selesai']['name'] != '') {
+        $nama_file = $_FILES['bukti_selesai']['name'];
+        $tmp_file = $_FILES['bukti_selesai']['tmp_name'];
+        $ext = strtolower(pathinfo($nama_file, PATHINFO_EXTENSION));
+        $allowed = array('jpg','jpeg','png','webp');
+        if(in_array($ext, $allowed)){
+            $new_name = 'tugas_'.$id_pesanan.'_'.time().'.'.$ext;
+            $upload_dir = 'uploads/audit/';
+            if(!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+            $upload_path = $upload_dir.$new_name;
+            if(move_uploaded_file($tmp_file, $upload_path)){
+                $foto_path = $upload_path;
+            }
+        } else {
+            $_SESSION['notif_pesan'] = "Swal.fire('Gagal!', 'Format foto bukti harus JPG/PNG/WEBP.', 'error');";
+            header("Location: admin.php?menu=tugas"); exit;
+        }
+    }
+
+    if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Menunggu Verifikasi' WHERE id='$id_pesanan'")){
+        $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+        $ket_log = "Staff mengupload hasil tugas. Mengubah status pengerjaan menjadi [Menunggu Verifikasi]";
+        catatLog($conn, $my_id_log, 'Upload Tugas', $invoice_lama, $ket_log, $foto_path);
+        
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Tugas ditandai selesai dan dikirim ke Super Admin.', 'success');";
+        header("Location: admin.php?menu=tugas"); exit;
+    }
+}
+
+// A1b. Super Admin Verifikasi Tugas
+if(isset($_POST['verifikasi_tugas'])){
+    $id_pesanan = (int)$_POST['id_pesanan'];
+    $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"));
+    if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Selesai' WHERE id='$id_pesanan'")){
+        $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+        $ket_log = "Super Admin memverifikasi tugas. Status pengerjaan menjadi [Selesai]";
+        catatLog($conn, $my_id_log, 'Verifikasi Tugas', $dt_lama['invoice'], $ket_log, null);
+        $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi.', 'success');";
+        header("Location: admin.php?menu=tugas"); exit;
     }
 }
 
@@ -290,8 +318,15 @@ $total_pesanan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml
 $total_pendapatan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(total_tagihan) as total FROM pesanan WHERE status_pembayaran='Lunas' $adminFilterStatAnd"))['total'];
 $total_request = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM request_custom WHERE status_request='Menunggu Review'"))['jml'];
 
-$jml_menunggu = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi' $adminFilterStatAnd"))['jml'];
-$badge_notif = ($jml_menunggu > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_menunggu</span>" : "";
+$jml_menunggu_bayar = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi' $adminFilterStatAnd"))['jml'];
+$badge_notif_bayar = ($jml_menunggu_bayar > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_menunggu_bayar</span>" : "";
+
+if($current_role == 'Super Admin'){
+    $jml_tugas = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pengerjaan='Menunggu Verifikasi'"))['jml'];
+} else {
+    $jml_tugas = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE admin_id='$my_id' AND status_pembayaran='Lunas' AND status_pengerjaan NOT IN ('Selesai','Menunggu Verifikasi')"))['jml'];
+}
+$badge_notif_tugas = ($jml_tugas > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_tugas</span>" : "";
 
 $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
 
@@ -450,7 +485,11 @@ if($current_role == 'Super Admin') {
         <a href="?menu=pesanan" class="nav-item <?= $menu == 'pesanan' ? 'active' : '' ?>">
             <i class="fas fa-receipt" id="navIconPesanan"></i> Pesanan Masuk 
             <span id="badgePesanan"></span>
-            <?= $badge_notif ?>
+            <?= $badge_notif_bayar ?>
+        </a>
+        <a href="?menu=tugas" class="nav-item <?= $menu == 'tugas' ? 'active' : '' ?>">
+            <i class="fas fa-tasks"></i> Tugas & Verifikasi
+            <?= $badge_notif_tugas ?>
         </a>
         <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=katalog" class="nav-item <?= $menu == 'katalog' ? 'active' : '' ?>"><i class="fas fa-layer-group"></i> Kelola Katalog</a>
@@ -588,8 +627,9 @@ if($current_role == 'Super Admin') {
                             if($row['status_pembayaran'] == 'Lunas') $badge = 'badge-green';
                             if($row['status_pembayaran'] == 'Belum Bayar') $badge = 'badge-red';
                             if($row['status_pembayaran'] == 'Menunggu Konfirmasi') $badge = 'badge-blue';
+                            if($row['status_pembayaran'] == 'Selesai Dikerjakan') $badge = 'badge-yellow';
                         ?>
-                        <tr <?= ($row['status_pembayaran'] == 'Menunggu Konfirmasi') ? "style='background:#f0f9ff;'" : "" ?>>
+                        <tr <?= ($row['status_pembayaran'] == 'Menunggu Konfirmasi' || $row['status_pembayaran'] == 'Selesai Dikerjakan') ? "style='background:#f0f9ff;'" : "" ?>>
                             <td style="font-weight:600; color:var(--primary);"><?= $row['invoice'] ?></td>
                             <td>
                                 <b><?= $row['nama_pemesan'] ?></b><br>
@@ -619,7 +659,7 @@ if($current_role == 'Super Admin') {
                                     <button type="button" onclick="openUpdateModal(<?= $row['id'] ?>, '<?= $row['status_pembayaran'] ?>')" class="btn-action btn-primary"><i class="fas fa-edit"></i> Ubah Status</button>
                                     
                                     <?php if($current_role == 'Super Admin') { ?>
-                                    <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirm('Yakin ingin menghapus pesanan ini?');">
+                                    <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirmDelete(event, this, 'Yakin ingin menghapus pesanan ini?');">
                                         <input type="hidden" name="tabel" value="pesanan">
                                         <input type="hidden" name="id_hapus" value="<?= $row['id'] ?>">
                                         <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
@@ -662,7 +702,10 @@ if($current_role == 'Super Admin') {
                         <select name="status_bayar" id="modal_status_bayar" class="form-control" onchange="toggleBuktiUpload()" required>
                             <option value="Belum Bayar">Belum Bayar</option>
                             <option value="Menunggu Konfirmasi">Menunggu Konfirmasi</option>
-                            <option value="Lunas">Lunas</option>
+                            <option value="Selesai Dikerjakan">Selesai Dikerjakan (Upload Hasil)</option>
+                            <?php if($current_role == 'Super Admin') { ?>
+                            <option value="Lunas">Lunas (Verifikasi Selesai)</option>
+                            <?php } ?>
                         </select>
                     </div>
                     <div class="form-group" id="fileUploadContainer" style="display:none; background:#f8fafc; padding:15px; border-radius:10px; border:1px dashed #cbd5e1;">
@@ -693,15 +736,136 @@ if($current_role == 'Super Admin') {
             let fileContainer = document.getElementById('fileUploadContainer');
             let fileInput = document.getElementById('bukti_selesai');
             
-            if(status === 'Lunas') {
+            if(status === 'Lunas' || status === 'Selesai Dikerjakan') {
                 fileContainer.style.display = 'block';
-                fileInput.setAttribute('required', 'required');
+                if(status === 'Selesai Dikerjakan') {
+                    fileInput.setAttribute('required', 'required');
+                } else {
+                    fileInput.removeAttribute('required'); // Super Admin (Lunas) tak wajib upload ulang
+                }
             } else {
                 fileContainer.style.display = 'none';
                 fileInput.removeAttribute('required');
             }
         }
         </script>
+
+        <?php } elseif($menu == 'tugas') { ?>
+        <div class="page-header" data-aos="fade-down">
+            <div>
+                <h1 class="page-title">Ruang Tugas & Verifikasi</h1>
+                <p style="color:var(--muted); margin-top:5px;">
+                    <?= $current_role == 'Super Admin' ? 'Daftar tugas staff yang siap diverifikasi.' : 'Daftar penugasan Anda yang belum selesai.' ?>
+                </p>
+            </div>
+        </div>
+
+        <div class="card" data-aos="fade-up" data-aos-delay="200">
+            <div style="overflow-x: auto;">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Klien & Tema</th>
+                            <th>Status Penugasan</th>
+                            <th>Aksi Cepat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+                        if($current_role == 'Super Admin'){
+                            // Super admin melihat semua yang statusnya Menunggu Verifikasi
+                            $q_tugas = mysqli_query($conn, "SELECT p.*, k.nama_tema, a.username as staff_name FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id LEFT JOIN admin_users a ON p.admin_id = a.id WHERE p.status_pengerjaan = 'Menunggu Verifikasi' ORDER BY p.id DESC");
+                        } else {
+                            // Staff hanya melihat tugas dia yg Lunas & belum diproses/selesai
+                            $q_tugas = mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.admin_id='$my_id' AND p.status_pembayaran='Lunas' AND p.status_pengerjaan NOT IN ('Selesai','Menunggu Verifikasi') ORDER BY p.id DESC");
+                        }
+                        
+                        while($rt = mysqli_fetch_assoc($q_tugas)) { 
+                        ?>
+                        <tr>
+                            <td style="font-weight:600; color:var(--primary);"><?= $rt['invoice'] ?></td>
+                            <td>
+                                <b><?= $rt['nama_pemesan'] ?></b><br>
+                                <span style="font-size:0.85rem; color:var(--muted);"><i class="fas fa-palette"></i> <?= $rt['nama_tema'] ?></span>
+                                <?php if($current_role == 'Super Admin') { ?>
+                                    <br><span style="font-size:0.8rem; color:#0284c7;"><i class="fas fa-user-edit"></i> Dikerjakan: <b><?= $rt['staff_name'] ?></b></span>
+                                <?php } ?>
+                            </td>
+                            <td>
+                                <?php if($current_role == 'Super Admin') { ?>
+                                    <span class="badge badge-yellow"><i class="fas fa-hourglass-half"></i> Menunggu Verifikasi</span>
+                                <?php } else { ?>
+                                    <span class="badge badge-blue"><i class="fas fa-tools"></i> Sedang Dikerjakan</span>
+                                <?php } ?>
+                            </td>
+                            <td>
+                                <?php if($current_role == 'Super Admin') { 
+                                    // Ambil gambar screenshot dari logging terakhir untuk invoice ini
+                                    $inv = $rt['invoice'];
+                                    $q_img = mysqli_query($conn, "SELECT screenshot_path FROM audit_logs WHERE target_id='$inv' AND action_type='Update Pesanan' AND screenshot_path IS NOT NULL ORDER BY id DESC LIMIT 1");
+                                    $img_path = "";
+                                    if(mysqli_num_rows($q_img) > 0) {
+                                        $img_path = mysqli_fetch_assoc($q_img)['screenshot_path'];
+                                    }
+                                ?>
+                                    <div style="display:flex; gap:10px;">
+                                        <?php if($img_path != "") { ?>
+                                            <a href="<?= $img_path ?>" target="_blank" class="btn-action btn-secondary"><i class="fas fa-image"></i> Lihat Hasil</a>
+                                        <?php } else { ?>
+                                            <button class="btn-action" style="background:#e2e8f0; color:#94a3b8; cursor:not-allowed;" disabled><i class="fas fa-image-slash"></i> Hasil Nihil</button>
+                                        <?php } ?>
+                                        <form method="POST" action="admin.php?menu=tugas" onsubmit="return confirm('Verifikasi dan selesaikan tugas ini?');" style="margin:0;">
+                                            <input type="hidden" name="id_pesanan" value="<?= $rt['id'] ?>">
+                                            <button type="submit" name="verifikasi_tugas" class="btn-action btn-primary"><i class="fas fa-check-circle"></i> Verifikasi Selesai</button>
+                                        </form>
+                                    </div>
+                                <?php } else { ?>
+                                    <button type="button" onclick="openStaffUploadModal(<?= $rt['id'] ?>)" class="btn-action btn-primary"><i class="fas fa-upload"></i> Upload Tugas Selesai</button>
+                                <?php } ?>
+                            </td>
+                        </tr>
+                        <?php } 
+                        if(mysqli_num_rows($q_tugas) == 0){
+                            echo "<tr><td colspan='4' style='text-align:center; padding:30px; color:var(--muted);'><i class='fas fa-check-circle fa-2x' style='margin-bottom:10px; color:#cbd5e1; display:block;'></i> Tidak ada tugas tertunda. Bagus sekali!</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <?php if($current_role != 'Super Admin') { ?>
+        <!-- Modal Khusus Upload Staff -->
+        <div id="modalStaffUpload" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div style="background:white; padding:30px; border-radius:15px; width:400px; max-width:90%;">
+                <h3 style="margin-bottom:20px; color:var(--text);"><i class="fas fa-cloud-upload-alt" style="color:var(--primary);"></i> Upload Bukti Selesai</h3>
+                <form method="POST" action="admin.php?menu=tugas" enctype="multipart/form-data">
+                    <input type="hidden" name="id_pesanan" id="staff_modal_id_pesanan">
+                    
+                    <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; border:1px dashed #cbd5e1;">
+                        <label style="color:var(--text); font-size:0.85rem;"><i class="fas fa-file-image" style="color:#0284c7;"></i> Screenshot Hasil Pengerjaan</label>
+                        <input type="file" name="bukti_selesai" class="form-control" accept="image/*" required style="margin-top:10px; padding:8px; font-size:0.85rem;">
+                        <span class="text-hint">Hanya file JPG/PNG max 2MB.</span>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
+                        <button type="button" onclick="closeStaffUploadModal()" class="btn-action btn-secondary">Batal</button>
+                        <button type="submit" name="update_tugas_selesai" class="btn-action btn-primary"><i class="fas fa-paper-plane"></i> Kirim ke Super Admin</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+            function openStaffUploadModal(id) {
+                document.getElementById('staff_modal_id_pesanan').value = id;
+                document.getElementById('modalStaffUpload').style.display = 'flex';
+            }
+            function closeStaffUploadModal() {
+                document.getElementById('modalStaffUpload').style.display = 'none';
+            }
+        </script>
+        <?php } ?>
 
         <?php } elseif($menu == 'katalog') { 
             // Cek apakah sedang dalam mode edit
@@ -794,7 +958,7 @@ if($current_role == 'Super Admin') {
                         <td>
                             <div style="display:flex; gap:5px;">
                                 <a href="admin.php?menu=katalog&edit_id=<?= $t['id'] ?>" class="btn-action btn-primary"><i class="fas fa-edit"></i> Edit</a>
-                                <form method="POST" action="admin.php?menu=katalog" onsubmit="return confirm('Yakin ingin menghapus tema ini?');" style="margin:0;">
+                                <form method="POST" action="admin.php?menu=katalog" onsubmit="return confirmDelete(event, this, 'Yakin hapus tema dari katalog?');" style="margin:0;">
                                     <input type="hidden" name="tabel" value="katalog_tema">
                                     <input type="hidden" name="id_hapus" value="<?= $t['id'] ?>">
                                     <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
@@ -834,7 +998,7 @@ if($current_role == 'Super Admin') {
                         <td><span class="badge badge-yellow"><?= $r['budget_estimasi'] ?></span></td>
                         <td style="max-width: 250px; line-height: 1.5;"><?= $r['deskripsi_konsep'] ?></td>
                         <td>
-                            <form method="POST" action="admin.php?menu=request" onsubmit="return confirm('Yakin ingin menghapus request ini?');">
+                            <form method="POST" action="admin.php?menu=request" onsubmit="return confirmDelete(event, this, 'Yakin ingin menghapus request ini?');">
                                 <input type="hidden" name="tabel" value="request_custom">
                                 <input type="hidden" name="id_hapus" value="<?= $r['id'] ?>">
                                 <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
@@ -952,7 +1116,7 @@ if($current_role == 'Super Admin') {
                                 </span>
                             </td>
                             <td>
-                                <form method="POST" action="admin.php?menu=galeri" onsubmit="return confirm('Yakin ingin menghapus foto ini dari galeri beranda?');">
+                                <form method="POST" action="admin.php?menu=galeri" onsubmit="return confirmDelete(event, this, 'Yakin ingin menghapus foto ini dari galeri beranda?');">
                                     <input type="hidden" name="tabel" value="galeri">
                                     <input type="hidden" name="id_hapus" value="<?= $g['id'] ?>">
                                     <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i> Hapus</button>
@@ -1041,7 +1205,7 @@ if($current_role == 'Super Admin') {
                             <td>
                                 <?php if($adm['role'] != 'Super Admin') { ?>
                                 <div style="display:flex; flex-direction:column; gap:5px; align-items:flex-start;">
-                                    <form method="POST" action="admin.php?menu=admin" onsubmit="return confirm('Yakin ingin mencabut akses admin ini?');" style="margin:0;">
+                                    <form method="POST" action="admin.php?menu=admin" onsubmit="return confirmDelete(event, this, 'Yakin ingin mencabut akses admin ini?');" style="margin:0;">
                                         <input type="hidden" name="tabel" value="admin_users">
                                         <input type="hidden" name="id_hapus" value="<?= $adm['id'] ?>">
                                         <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i> Cabut Akses</button>
@@ -1100,6 +1264,7 @@ if($current_role == 'Super Admin') {
                             <th>Tujuan / Invoice</th>
                             <th>Keterangan Tambahan</th>
                             <th>Bukti Screenshot</th>
+                            <?php if($current_role == 'Super Admin') { echo "<th>Aksi</th>"; } ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -1122,6 +1287,15 @@ if($current_role == 'Super Admin') {
                                     <span style="color:#cbd5e1; font-size:0.8rem; font-style:italic;">-- Tidak ada --</span>
                                 <?php } ?>
                             </td>
+                            <?php if($current_role == 'Super Admin') { ?>
+                            <td style="text-align:center;">
+                                <form method="POST" action="admin.php?menu=audit" onsubmit="return confirmDelete(event, this, 'Yakin ingin menghapus log aktivitas ini?');" style="margin:0;">
+                                    <input type="hidden" name="tabel" value="audit_logs">
+                                    <input type="hidden" name="id_hapus" value="<?= $log['id'] ?>">
+                                    <button type="submit" name="hapus_data" class="btn-action btn-danger" style="padding:4px 8px; font-size:0.8rem;"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </td>
+                            <?php } ?>
                         </tr>
                         <?php } ?>
                     </tbody>
@@ -1266,16 +1440,17 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                 $adminFilterKalender = "AND p.admin_id='$my_id'"; 
             }
 
-            $q_kalender = mysqli_query($conn, "SELECT p.nama_pemesan, p.tanggal_acara 
+            $q_kalender = mysqli_query($conn, "SELECT p.nama_pemesan, p.tanggal_acara, p.status_pengerjaan 
                                                FROM pesanan p 
                                                WHERE p.status_pembayaran != 'Belum Bayar' $adminFilterKalender");
             $events = [];
             while($row = mysqli_fetch_assoc($q_kalender)){
+                $is_verified = ($row['status_pengerjaan'] == 'Selesai');
                 $events[] = array(
-                    'title' => 'TERBOOKING - ' . $row['nama_pemesan'],
+                    'title' => ($is_verified ? 'TERVERIFIKASI - ' : 'TERBOOKING - ') . $row['nama_pemesan'],
                     'start' => $row['tanggal_acara'],
-                    'color' => '#fca5a5',
-                    'textColor' => '#991b1b',
+                    'color' => $is_verified ? '#bbf7d0' : '#fca5a5',
+                    'textColor' => $is_verified ? '#166534' : '#991b1b',
                     'allDay' => true
                 );
             }
@@ -1366,6 +1541,34 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
 
         // Tampilkan Notifikasi Sistem
         <?= $notif; ?>
+
+        // Confirm Delete Animation (Tanya Konfirmasi dengan Swal)
+        function confirmDelete(e, formElement, popupMessage) {
+            e.preventDefault(); // Hentikan submit bawaan
+            Swal.fire({
+                title: 'Apakah Anda yakin?',
+                text: popupMessage,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'Ya, hapus!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Karena formElement.submit() Javascript tidak menyertakan tombol submit yang ditekan, 
+                    // kita perlu membuat elemen input hidden dadakan agar terdeteksi di PHP isset($_POST['hapus_data'])
+                    let hiddenInput = document.createElement("input");
+                    hiddenInput.setAttribute("type", "hidden");
+                    hiddenInput.setAttribute("name", "hapus_data");
+                    hiddenInput.setAttribute("value", "true");
+                    formElement.appendChild(hiddenInput);
+                    
+                    formElement.submit(); // Submit asli diteruskan
+                }
+            });
+            return false;
+        }
 
         // Fitur Live Search Table Modern
         function filterTable() {

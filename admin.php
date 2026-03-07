@@ -401,6 +401,36 @@ if(isset($_POST['hapus_data'])){
     header("Location: admin.php?menu=$hal"); exit;
 }
 
+// G. BUAT / UPDATE Akun Premium Klien
+if(isset($_POST['buat_akun_premium'])) {
+    if($current_role != 'Super Admin') { header("Location: admin.php"); exit; }
+    $pesanan_id = (int)$_POST['pesanan_id_prem'];
+    $uname = mysqli_real_escape_string($conn, trim($_POST['prem_username']));
+    $pass  = md5($_POST['prem_password']);
+    // Upsert: insert or update
+    $cek = mysqli_query($conn, "SELECT id FROM klien_premium WHERE pesanan_id='$pesanan_id'");
+    if (mysqli_num_rows($cek) > 0) {
+        mysqli_query($conn, "UPDATE klien_premium SET username='$uname', password='$pass', is_active=1 WHERE pesanan_id='$pesanan_id'");
+        $_SESSION['notif_pesan'] = "Swal.fire('Diperbarui!', 'Akun Premium berhasil diperbarui.', 'success');";
+    } else {
+        mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, created_by) VALUES ('$pesanan_id', '$uname', '$pass', '$my_id')");
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Akun Premium klien berhasil dibuat.', 'success');";
+    }
+    header("Location: admin.php?menu=premium"); exit;
+}
+
+// H. Balas Chat dari Admin / Staff
+if(isset($_POST['balas_chat_admin'])) {
+    $pesanan_id_chat = (int)$_POST['pesanan_id_chat'];
+    $pesan_admin = mysqli_real_escape_string($conn, trim($_POST['pesan_admin']));
+    if($pesan_admin !== '') {
+        $nama_admin_chat = mysqli_real_escape_string($conn, $current_admin);
+        mysqli_query($conn, "INSERT INTO pesan_proyek (pesanan_id, pengirim, nama_pengirim, pesan) VALUES ('$pesanan_id_chat', 'admin', '$nama_admin_chat', '$pesan_admin')");
+        $_SESSION['notif_pesan'] = "Swal.fire({toast:true, position:'top-end', icon:'success', title:'Pesan terkirim!', showConfirmButton:false, timer:2000});";
+    }
+    header("Location: admin.php?menu=premium&pid=$pesanan_id_chat"); exit;
+}
+
 // ==========================================
 // 3. AMBIL STATISTIK UNTUK DASHBOARD
 // ==========================================
@@ -611,6 +641,9 @@ if($current_role == 'Super Admin') {
         <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=galeri" class="nav-item <?= $menu == 'galeri' ? 'active' : '' ?>"><i class="fas fa-images"></i> Pengaturan Galeri</a>
         <a href="?menu=admin" class="nav-item <?= $menu == 'admin' ? 'active' : '' ?>"><i class="fas fa-users-cog"></i> Kelola Admin</a>
+        <a href="?menu=premium" class="nav-item <?= $menu == 'premium' ? 'active' : '' ?>" style="background: <?= $menu == 'premium' ? 'var(--primary)' : 'rgba(212,175,55,0.08)' ?>; color: <?= $menu == 'premium' ? 'white' : '#D4AF37' ?>;">
+            <i class="fas fa-crown"></i> Premium Portal
+        </a>
         <?php } ?>
         <a href="?menu=audit" class="nav-item <?= $menu == 'audit' ? 'active' : '' ?>"><i class="fas fa-history"></i> Aktivitas Log</a>
         <a href="?menu=kalender" class="nav-item <?= $menu == 'kalender' ? 'active' : '' ?>"><i class="fas fa-calendar-alt"></i> Kalender Booking</a>
@@ -1898,6 +1931,189 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             .fc-button-primary:hover { background-color: #3b4b3e !important; }
             .fc-day-today { background-color: #fefce8 !important; }
         </style>
+
+        <?php } elseif($menu == 'premium') {
+            if($current_role != 'Super Admin') { header("Location: admin.php?menu=dashboard"); exit; }
+            // Fetch all paid orders for premium management
+            $q_prem_orders = mysqli_query($conn, "
+                SELECT p.id, p.invoice, p.nama_pemesan, p.status_pembayaran, p.status_pengerjaan, p.tanggal_acara,
+                       k.nama_tema, a.username as staff_name,
+                       kp.id as kp_id, kp.username as prem_user, kp.is_active as prem_active
+                FROM pesanan p
+                LEFT JOIN katalog_tema k ON p.tema_id = k.id
+                LEFT JOIN admin_users a ON p.admin_id = a.id
+                LEFT JOIN klien_premium kp ON kp.pesanan_id = p.id
+                ORDER BY p.id DESC
+            ");
+            // Chat for selected order
+            $pid_chat = isset($_GET['pid']) ? (int)$_GET['pid'] : 0;
+            $chat_messages = [];
+            $chat_pesanan = null;
+            if ($pid_chat > 0) {
+                $chat_pesanan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.nama_pemesan, p.invoice FROM pesanan p WHERE p.id='$pid_chat'"));
+                $qcm = mysqli_query($conn, "SELECT * FROM pesan_proyek WHERE pesanan_id='$pid_chat' ORDER BY id ASC LIMIT 80");
+                while ($cm = mysqli_fetch_assoc($qcm)) { $chat_messages[] = $cm; }
+            }
+        ?>
+        <div class="page-header" data-aos="fade-down">
+            <div>
+                <h1 class="page-title"><i class="fas fa-crown" style="color:#D4AF37; margin-right:8px;"></i> Premium Portal Manager</h1>
+                <p style="color:var(--muted); margin-top:5px;">Buat akun klien premium dan pantau percakapan mereka dengan tim.</p>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:30px; align-items:flex-start;">
+
+            <!-- LEFT: Table of all orders -->
+            <div style="flex: 2;">
+                <div class="card" data-aos="fade-up">
+                    <div class="card-header"><i class="fas fa-list"></i> Semua Pesanan & Status Akun Premium</div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead><tr>
+                                <th>Klien & Invoice</th>
+                                <th>Tema</th>
+                                <th>Status Bayar</th>
+                                <th>Akun Premium</th>
+                                <th>Aksi</th>
+                            </tr></thead>
+                            <tbody>
+                            <?php while($po = mysqli_fetch_assoc($q_prem_orders)) { ?>
+                            <tr style="<?= $po['kp_id'] ? 'background:#fefce8;' : '' ?>">
+                                <td>
+                                    <b style="color:var(--primary);"><?= htmlspecialchars($po['invoice']) ?></b><br>
+                                    <span><?= htmlspecialchars($po['nama_pemesan']) ?></span>
+                                </td>
+                                <td style="font-size:0.88rem;"><?= htmlspecialchars($po['nama_tema'] ?? '-') ?></td>
+                                <td>
+                                    <?php
+                                    $bp = 'badge-red';
+                                    if($po['status_pembayaran']=='Lunas') $bp='badge-green';
+                                    elseif($po['status_pembayaran']=='Menunggu Konfirmasi') $bp='badge-blue';
+                                    ?>
+                                    <span class="badge <?= $bp ?>"><?= $po['status_pembayaran'] ?></span>
+                                </td>
+                                <td>
+                                    <?php if($po['kp_id']): ?>
+                                        <span class="badge badge-green"><i class="fas fa-check-circle"></i> Aktif</span><br>
+                                        <span style="font-size:0.78rem; color:var(--muted);">User: <b><?= htmlspecialchars($po['prem_user']) ?></b></span>
+                                    <?php else: ?>
+                                        <span class="badge badge-yellow"><i class="fas fa-minus-circle"></i> Belum Dibuat</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="white-space:nowrap;">
+                                    <button onclick="openPremModal(<?= $po['id'] ?>, '<?= htmlspecialchars($po['invoice'], ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_user'] ?? '', ENT_QUOTES) ?>')" class="btn-action btn-primary" style="font-size:0.82rem; background:#D4AF37; border:none; margin-bottom:5px;">
+                                        <i class="fas fa-key"></i> <?= $po['kp_id'] ? 'Edit Akun' : 'Buat Akun' ?>
+                                    </button>
+                                    <a href="?menu=premium&pid=<?= $po['id'] ?>" class="btn-action btn-secondary" style="font-size:0.82rem; display:inline-flex;">
+                                        <i class="fas fa-comments"></i> Chat (<?= mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM pesan_proyek WHERE pesanan_id='".$po['id']."'"))['c'] ?>)
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php } ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Chat Panel -->
+            <div style="flex: 1; position:sticky; top:40px;">
+                <?php if ($pid_chat > 0 && $chat_pesanan): ?>
+                <div class="card" data-aos="fade-left">
+                    <div class="card-header">
+                        <i class="fas fa-comments" style="color:var(--primary);"></i>
+                        Chat: <?= htmlspecialchars($chat_pesanan['nama_pemesan']) ?>
+                        <span style="font-size:0.75rem; font-weight:400; color:var(--muted); margin-left:5px;"><?= htmlspecialchars($chat_pesanan['invoice']) ?></span>
+                    </div>
+                    <!-- Messages -->
+                    <div id="adminChatBody" style="height:350px; overflow-y:auto; padding:15px 20px; display:flex; flex-direction:column; gap:10px; background:#fafaf9;">
+                        <?php if (empty($chat_messages)): ?>
+                            <p style="text-align:center; color:var(--muted); padding:40px 0; font-size:0.88rem;"><i class="fas fa-comment-slash fa-2x" style="display:block; margin-bottom:10px; opacity:0.3;"></i>Belum ada pesan.</p>
+                        <?php else: ?>
+                            <?php foreach ($chat_messages as $cm):
+                                $is_admin = $cm['pengirim'] === 'admin';
+                            ?>
+                            <div style="display:flex; gap:8px; flex-direction:<?= $is_admin ? 'row-reverse' : 'row' ?>; align-items:flex-end;">
+                                <div style="width:30px; height:30px; border-radius:50%; background:<?= $is_admin ? 'var(--primary)' : '#D4AF37' ?>; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:700; flex-shrink:0;">
+                                    <?= strtoupper(substr($cm['nama_pengirim'], 0, 1)) ?>
+                                </div>
+                                <div style="max-width:75%;">
+                                    <div style="background:<?= $is_admin ? 'var(--primary)' : '#fff' ?>; color:<?= $is_admin ? '#fff' : 'var(--text)' ?>; padding:10px 14px; border-radius:14px; font-size:0.85rem; line-height:1.5; border:1px solid <?= $is_admin ? 'transparent' : 'var(--border)' ?>;">
+                                        <?= nl2br(htmlspecialchars($cm['pesan'])) ?>
+                                    </div>
+                                    <div style="font-size:0.7rem; color:var(--muted); margin-top:3px; text-align:<?= $is_admin ? 'right' : 'left' ?>;">
+                                        <?= htmlspecialchars($cm['nama_pengirim']) ?> · <?= date('H:i', strtotime($cm['created_at'])) ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Reply Form -->
+                    <form method="POST" action="admin.php?menu=premium&pid=<?= $pid_chat ?>" style="padding:12px 15px; border-top:1px solid var(--border); display:flex; gap:10px;">
+                        <input type="hidden" name="pesanan_id_chat" value="<?= $pid_chat ?>">
+                        <input type="text" name="pesan_admin" class="form-control" placeholder="Balas pesan klien..." required style="flex:1; border-radius:50px; padding:10px 18px; font-size:0.88rem;">
+                        <button type="submit" name="balas_chat_admin" class="btn-action btn-primary" style="width:42px; height:42px; border-radius:50%; padding:0; justify-content:center;">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+                <?php else: ?>
+                <div class="card" style="padding:40px 25px; text-align:center; color:var(--muted);">
+                    <i class="fas fa-comments fa-2x" style="opacity:0.3; display:block; margin-bottom:12px;"></i>
+                    <p style="font-size:0.88rem;">Klik tombol <b>Chat</b> di tabel kiri untuk membuka percakapan dengan klien.</p>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Modal Buat/Edit Akun Premium -->
+        <div id="modalPremium" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div style="background:white; padding:35px; border-radius:18px; width:440px; max-width:90%; box-shadow:0 40px 80px rgba(0,0,0,0.2); border-top:4px solid #D4AF37;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="color:var(--text);"><i class="fas fa-crown" style="color:#D4AF37;"></i> Akun Premium Klien</h3>
+                    <button onclick="closePremModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--muted);">&times;</button>
+                </div>
+                <p id="premModalInvoice" style="font-size:0.8rem; color:var(--muted); margin-bottom:20px; padding:8px 12px; background:#f8f9fa; border-radius:8px; font-family:monospace;"></p>
+                <form method="POST" action="admin.php?menu=premium">
+                    <input type="hidden" name="pesanan_id_prem" id="premPesananId">
+                    <div class="form-group">
+                        <label>Username Klien</label>
+                        <input type="text" name="prem_username" id="premUsername" class="form-control" placeholder="contoh: romeo_juliet" required>
+                        <span class="text-hint">Klien akan login dengan username ini di portal premium.</span>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" name="prem_password" class="form-control" placeholder="Buat password yang kuat" required>
+                        <span class="text-hint">Min. 6 karakter. Berikan ke klien secara pribadi.</span>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                        <button type="button" onclick="closePremModal()" class="btn-action btn-secondary">Batal</button>
+                        <button type="submit" name="buat_akun_premium" class="btn-action btn-primary" style="background:#D4AF37; border:none;">
+                            <i class="fas fa-save"></i> Simpan Akun
+                        </button>
+                    </div>
+                </form>
+                <div style="margin-top:15px; padding:12px; background:#fefce8; border-radius:10px; font-size:0.82rem; color:#854d0e;">
+                    <i class="fas fa-info-circle"></i> Link portal klien: <code><?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on'?'https':'http').'://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['PHP_SELF']) ?>/admin_premium/login.php</code>
+                </div>
+            </div>
+        </div>
+        <script>
+        function openPremModal(id, invoice, existingUser) {
+            document.getElementById('premPesananId').value = id;
+            document.getElementById('premModalInvoice').textContent = '📄 Invoice: ' + invoice;
+            document.getElementById('premUsername').value = existingUser || '';
+            document.getElementById('modalPremium').style.display = 'flex';
+        }
+        function closePremModal() {
+            document.getElementById('modalPremium').style.display = 'none';
+        }
+        // Auto scroll chat
+        const acb = document.getElementById('adminChatBody');
+        if (acb) acb.scrollTop = acb.scrollHeight;
+        </script>
 
         <?php } elseif($menu == 'template') { 
             // ==========================================

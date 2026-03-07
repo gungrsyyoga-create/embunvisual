@@ -41,12 +41,53 @@ if(isset($_SESSION['notif_pesan'])) {
     unset($_SESSION['notif_pesan']);
 }
 
+// Definisi role & ID awal (dibutuhkan oleh semua handler POST di bawah)
+$current_admin = isset($_SESSION['admin_username']) ? $_SESSION['admin_username'] : 'admin';
+$current_role  = isset($_SESSION['admin_role'])    ? $_SESSION['admin_role']    : 'Super Admin';
+$my_id         = isset($_SESSION['admin_id'])      ? $_SESSION['admin_id']      : 1;
+
 // Update Helper: Catat history ke Log
 function catatLog($conn, $admin_id, $action, $target, $keterangan, $foto = null) {
     $action = mysqli_real_escape_string($conn, $action);
     $target = mysqli_real_escape_string($conn, $target);
     $ket = mysqli_real_escape_string($conn, $keterangan);
     mysqli_query($conn, "INSERT INTO audit_logs (admin_id, action_type, target_id, keterangan, screenshot_path) VALUES ('$admin_id', '$action', '$target', '$ket', '$foto')");
+}
+
+// ==========================================
+// HANDLER DOWNLOAD FILE TEMPLATE
+// ==========================================
+if(isset($_GET['dl']) && $menu == 'template') {
+    $rel_file = trim($_GET['dl'], '/\\');
+
+    // Whitelist folder yang diizinkan untuk didownload
+    $allowed_prefixes = ['tema/', 'themes/basic/'];
+    $is_allowed = false;
+    foreach($allowed_prefixes as $prefix) {
+        if(strpos($rel_file, $prefix) === 0) { $is_allowed = true; break; }
+    }
+
+    // Cegah path traversal (../)
+    if(strpos($rel_file, '..') !== false) $is_allowed = false;
+
+    if($is_allowed) {
+        $abs_file = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel_file);
+        if(file_exists($abs_file)) {
+            $dl_name = basename($abs_file) . '.txt'; // Download as .txt agar mudah dibuka
+            header('Content-Description: File Transfer');
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $dl_name . '"');
+            header('Content-Length: ' . filesize($abs_file));
+            header('Cache-Control: no-cache');
+            readfile($abs_file);
+            exit;
+        } else {
+            $_SESSION['notif_pesan'] = "Swal.fire('Error!', 'File tidak ditemukan.', 'error');";
+        }
+    } else {
+        $_SESSION['notif_pesan'] = "Swal.fire('Akses Ditolak!', 'File tidak diizinkan untuk diunduh.', 'error');";
+    }
+    header("Location: admin.php?menu=template"); exit;
 }
 
 // A. Update Status Pembayaran Pesanan (Termasuk Upload Screenshot)
@@ -121,17 +162,35 @@ if(isset($_POST['update_tugas_selesai'])){
 if(isset($_POST['verifikasi_tugas'])){
     $id_pesanan = (int)$_POST['id_pesanan'];
     $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"));
-    if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Selesai' WHERE id='$id_pesanan'")){
+    if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Selesai', catatan_revisi=NULL WHERE id='$id_pesanan'")){
         $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
-        $ket_log = "Super Admin memverifikasi tugas. Status pengerjaan menjadi [Selesai]";
-        catatLog($conn, $my_id_log, 'Verifikasi Tugas', $dt_lama['invoice'], $ket_log, null);
+        catatLog($conn, $my_id_log, 'Verifikasi Tugas', $dt_lama['invoice'], "Super Admin memverifikasi tugas. Status pengerjaan menjadi [Selesai]", null);
         $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi.', 'success');";
         header("Location: admin.php?menu=tugas"); exit;
     }
 }
 
-// A2. Update Assign Admin (Pesanan)
+// A1c. Super Admin Kembalikan Tugas untuk Revisi
+if(isset($_POST['kembalikan_revisi'])){
+    if($current_role != 'Super Admin') { header("Location: admin.php?menu=dashboard"); exit; }
+    $id_pesanan   = (int)$_POST['id_pesanan'];
+    $catatan      = mysqli_real_escape_string($conn, trim($_POST['catatan_revisi']));
+    $dt_rev = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"));
+    if(mysqli_query($conn, "UPDATE pesanan SET status_pengerjaan='Perlu Revisi', catatan_revisi='$catatan' WHERE id='$id_pesanan'")){
+        $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+        catatLog($conn, $my_id_log, 'Kembalikan Revisi', $dt_rev['invoice'], "Tugas dikembalikan untuk direvisi. Catatan: $catatan", null);
+        $_SESSION['notif_pesan'] = "Swal.fire('Dikembalikan!', 'Tugas dikembalikan ke staff dengan catatan revisi.', 'warning');";
+    }
+    header("Location: admin.php?menu=tugas"); exit;
+}
+
+// A2. Update Assign Admin (dipindah ke tab Tugas)
 if(isset($_POST['update_assign'])){
+    // Hanya Super Admin yang bisa assign
+    if($current_role != 'Super Admin') {
+        $_SESSION['notif_pesan'] = "Swal.fire('Akses Ditolak!', 'Hanya Super Admin yang bisa menugaskan staff.', 'error');";
+        header("Location: admin.php?menu=dashboard"); exit;
+    }
     $id_pesanan = (int)$_POST['id_pesanan'];
     $admin_id = $_POST['admin_assign_id']; 
     $invoice_val = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"))['invoice'];
@@ -144,7 +203,7 @@ if(isset($_POST['update_assign'])){
         
         $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Penugasan staff diperbarui.', 'success');";
     }
-    header("Location: admin.php?menu=pesanan"); exit;
+    header("Location: admin.php?menu=tugas"); exit;
 }
 
 // B. Tambah Katalog Tema Baru
@@ -319,6 +378,7 @@ $total_pendapatan = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(total_tag
 $total_request = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM request_custom WHERE status_request='Menunggu Review'"))['jml'];
 
 $jml_menunggu_bayar = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(id) as jml FROM pesanan WHERE status_pembayaran='Menunggu Konfirmasi' $adminFilterStatAnd"))['jml'];
+$jml_menunggu = $jml_menunggu_bayar; // Alias agar tidak undefined di JS
 $badge_notif_bayar = ($jml_menunggu_bayar > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_menunggu_bayar</span>" : "";
 
 if($current_role == 'Super Admin'){
@@ -329,6 +389,14 @@ if($current_role == 'Super Admin'){
 $badge_notif_tugas = ($jml_tugas > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_tugas</span>" : "";
 
 $menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
+
+// ==========================================
+// AKSES GUARD: Pesanan Masuk hanya untuk Super Admin
+// ==========================================
+if($menu == 'pesanan' && $current_role != 'Super Admin') {
+    $_SESSION['notif_pesan'] = "Swal.fire('Akses Ditolak!', 'Halaman Pesanan Masuk hanya untuk Super Admin.', 'error');";
+    header("Location: admin.php?menu=dashboard"); exit;
+}
 
 // 3B. TABEL KINERJA ADMIN (HANYA UNTUK SUPER ADMIN)
 $kinerja_admin = [];
@@ -482,14 +550,19 @@ if($current_role == 'Super Admin') {
         <div class="brand"><i class="fas fa-leaf"></i> Embun Visual</div>
         
         <a href="?menu=dashboard" class="nav-item <?= $menu == 'dashboard' ? 'active' : '' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=pesanan" class="nav-item <?= $menu == 'pesanan' ? 'active' : '' ?>">
             <i class="fas fa-receipt" id="navIconPesanan"></i> Pesanan Masuk 
             <span id="badgePesanan"></span>
             <?= $badge_notif_bayar ?>
         </a>
+        <?php } ?>
         <a href="?menu=tugas" class="nav-item <?= $menu == 'tugas' ? 'active' : '' ?>">
             <i class="fas fa-tasks"></i> Tugas & Verifikasi
             <?= $badge_notif_tugas ?>
+        </a>
+        <a href="?menu=template" class="nav-item <?= $menu == 'template' ? 'active' : '' ?>">
+            <i class="fas fa-code"></i> Template Referensi
         </a>
         <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=katalog" class="nav-item <?= $menu == 'katalog' ? 'active' : '' ?>"><i class="fas fa-layer-group"></i> Kelola Katalog</a>
@@ -540,7 +613,7 @@ if($current_role == 'Super Admin') {
             </div>
             <div class="stat-card" data-aos="fade-up" data-aos-delay="300">
                 <div class="stat-title">Menunggu Konfirmasi Transfer</div>
-                <div class="stat-value" style="color:#0284c7;"><?= number_format($jml_menunggu) ?> <i class="fas fa-bell" style="font-size:1rem;"></i></div>
+                <div class="stat-value" style="color:#0284c7;"><?= number_format($jml_menunggu_bayar) ?> <i class="fas fa-bell" style="font-size:1rem;"></i></div>
             </div>
         </div>
         
@@ -658,31 +731,26 @@ if($current_role == 'Super Admin') {
                                 <div style="display:flex; gap:10px; align-items:center;">
                                     <button type="button" onclick="openUpdateModal(<?= $row['id'] ?>, '<?= $row['status_pembayaran'] ?>')" class="btn-action btn-primary"><i class="fas fa-edit"></i> Ubah Status</button>
                                     
-                                    <?php if($current_role == 'Super Admin') { ?>
                                     <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirmDelete(event, this, 'Yakin ingin menghapus pesanan ini?');">
                                         <input type="hidden" name="tabel" value="pesanan">
                                         <input type="hidden" name="id_hapus" value="<?= $row['id'] ?>">
                                         <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
                                     </form>
-                                    <?php } ?>
                                 </div>
-                                
-                                <?php if($current_role == 'Super Admin') { ?>
-                                <form method="POST" style="display:flex; gap:6px; align-items:center; width:100%; border-top:1px dashed var(--border); padding-top:8px; margin-top:2px;">
-                                    <input type="hidden" name="id_pesanan" value="<?= $row['id'] ?>">
-                                    <select name="admin_assign_id" class="form-control" style="padding:4px; flex:1; font-size:0.75rem; border-color:var(--primary); font-weight:500;">
-                                        <option value="">-- Tugaskan ke --</option>
-                                        <?php foreach($list_admins as $ad){ ?>
-                                            <option value="<?= $ad['id'] ?>" <?= ($row['admin_id'] == $ad['id']) ? 'selected' : '' ?>><?= htmlspecialchars($ad['username']) ?></option>
-                                        <?php } ?>
-                                    </select>
-                                    <button type="submit" name="update_assign" class="btn-action btn-secondary" style="padding:4px 8px;"><i class="fas fa-user-edit"></i></button>
-                                </form>
-                                <?php } else { ?>
-                                    <div style="width:100%; border-top:1px dashed var(--border); padding-top:8px; margin-top:2px;">
-                                        <?php if($row['admin_id']) echo "<span class='badge badge-blue' style='width:100%; text-align:center;'><i class='fas fa-id-badge'></i> Ditugaskan pada Anda</span>"; ?>
-                                    </div>
-                                <?php } ?>
+                                <?php
+                                    // Tampilkan info staff yang sudah di-assign (read-only di sini)
+                                    if($row['admin_id']) {
+                                        $staff_info = mysqli_fetch_assoc(mysqli_query($conn, "SELECT username FROM admin_users WHERE id='".(int)$row['admin_id']."'"));
+                                        $staff_name = $staff_info ? htmlspecialchars($staff_info['username']) : 'Staff';
+                                        echo "<div style='border-top:1px dashed var(--border); padding-top:6px; margin-top:2px;'>
+                                                <span class='badge badge-blue'><i class='fas fa-user-check'></i> Ditugaskan: $staff_name</span>
+                                              </div>";
+                                    } else {
+                                        echo "<div style='border-top:1px dashed var(--border); padding-top:6px; margin-top:2px;'>
+                                                <span style='font-size:0.75rem; color:var(--muted);'><i class='fas fa-user-slash'></i> Belum di-assign</span>
+                                              </div>";
+                                    }
+                                ?>
                             </td>
                         </tr>
                         <?php } ?>
@@ -750,85 +818,106 @@ if($current_role == 'Super Admin') {
         }
         </script>
 
-        <?php } elseif($menu == 'tugas') { ?>
+        <?php } elseif($menu == 'tugas') { 
+            // Ambil daftar semua staff untuk dropdown assign
+            $list_all_staff = [];
+            $q_allstaff = mysqli_query($conn, "SELECT id, username FROM admin_users ORDER BY id ASC");
+            while($ads = mysqli_fetch_assoc($q_allstaff)) { $list_all_staff[] = $ads; }
+        ?>
         <div class="page-header" data-aos="fade-down">
             <div>
                 <h1 class="page-title">Ruang Tugas & Verifikasi</h1>
                 <p style="color:var(--muted); margin-top:5px;">
-                    <?= $current_role == 'Super Admin' ? 'Daftar tugas staff yang siap diverifikasi.' : 'Daftar penugasan Anda yang belum selesai.' ?>
+                    <?= $current_role == 'Super Admin' ? 'Konfirmasi pembayaran, tugaskan staff, dan verifikasi hasil pekerjaan.' : 'Daftar penugasan Anda yang aktif.' ?>
                 </p>
             </div>
         </div>
 
-        <div class="card" data-aos="fade-up" data-aos-delay="200">
-            <div style="overflow-x: auto;">
-                <table id="dataTable">
+        <?php if($current_role == 'Super Admin') { ?>
+
+        <!-- ====================================================
+             SUPER ADMIN: SECTION A — KONFIRMASI PEMBAYARAN
+        ==================================================== -->
+        <div class="card" data-aos="fade-up" data-aos-delay="150" style="margin-bottom:30px;">
+            <div class="card-header" style="background:linear-gradient(90deg,#fff7ed,#fff); border-left:4px solid #f97316;">
+                <i class="fas fa-money-bill-wave" style="color:#f97316;"></i> 
+                Section A — Konfirmasi Pembayaran & Penugasan Staff
+                <span style="font-size:0.8rem; font-weight:400; color:var(--muted); margin-left:8px;">Pesanan yang belum lunas. Konfirmasi bayar di sini, lalu assign ke staff.</span>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
                     <thead>
                         <tr>
-                            <th>Invoice</th>
-                            <th>Klien & Tema</th>
-                            <th>Status Penugasan</th>
-                            <th>Aksi Cepat</th>
+                            <th>Invoice & Klien</th>
+                            <th>Tema & Tgl Acara</th>
+                            <th>Tagihan</th>
+                            <th>Status Bayar</th>
+                            <th>Aksi Pembayaran & Penugasan</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php 
-                        $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
-                        if($current_role == 'Super Admin'){
-                            // Super admin melihat semua yang statusnya Menunggu Verifikasi
-                            $q_tugas = mysqli_query($conn, "SELECT p.*, k.nama_tema, a.username as staff_name FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id LEFT JOIN admin_users a ON p.admin_id = a.id WHERE p.status_pengerjaan = 'Menunggu Verifikasi' ORDER BY p.id DESC");
-                        } else {
-                            // Staff hanya melihat tugas dia yg Lunas & belum diproses/selesai
-                            $q_tugas = mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.admin_id='$my_id' AND p.status_pembayaran='Lunas' AND p.status_pengerjaan NOT IN ('Selesai','Menunggu Verifikasi') ORDER BY p.id DESC");
-                        }
+                        $q_pending = mysqli_query($conn, "SELECT p.*, k.nama_tema, k.slug_demo, a.username as staff_name 
+                            FROM pesanan p 
+                            LEFT JOIN katalog_tema k ON p.tema_id = k.id 
+                            LEFT JOIN admin_users a ON p.admin_id = a.id 
+                            WHERE p.status_pembayaran != 'Lunas' 
+                            ORDER BY 
+                                CASE p.status_pembayaran 
+                                    WHEN 'Menunggu Konfirmasi' THEN 1 
+                                    WHEN 'Belum Bayar' THEN 2 
+                                    ELSE 3 END, 
+                                p.id DESC");
                         
-                        while($rt = mysqli_fetch_assoc($q_tugas)) { 
+                        $count_pending = 0;
+                        while($rp = mysqli_fetch_assoc($q_pending)) { 
+                            $count_pending++;
+                            $badge_p = 'badge-red';
+                            if($rp['status_pembayaran'] == 'Menunggu Konfirmasi') $badge_p = 'badge-blue';
+                            if($rp['status_pembayaran'] == 'Selesai Dikerjakan') $badge_p = 'badge-yellow';
                         ?>
-                        <tr>
-                            <td style="font-weight:600; color:var(--primary);"><?= $rt['invoice'] ?></td>
+                        <tr style="<?= $rp['status_pembayaran'] == 'Menunggu Konfirmasi' ? 'background:#fffbeb;' : '' ?>">
                             <td>
-                                <b><?= $rt['nama_pemesan'] ?></b><br>
-                                <span style="font-size:0.85rem; color:var(--muted);"><i class="fas fa-palette"></i> <?= $rt['nama_tema'] ?></span>
-                                <?php if($current_role == 'Super Admin') { ?>
-                                    <br><span style="font-size:0.8rem; color:#0284c7;"><i class="fas fa-user-edit"></i> Dikerjakan: <b><?= $rt['staff_name'] ?></b></span>
-                                <?php } ?>
+                                <b style="color:var(--primary);"><?= $rp['invoice'] ?></b><br>
+                                <span style="font-size:0.9rem;"><?= htmlspecialchars($rp['nama_pemesan']) ?></span><br>
+                                <a href="https://wa.me/<?= $rp['no_whatsapp'] ?>" target="_blank" style="color:#25D366; text-decoration:none; font-size:0.8rem;"><i class="fab fa-whatsapp"></i> <?= $rp['no_whatsapp'] ?></a>
                             </td>
                             <td>
-                                <?php if($current_role == 'Super Admin') { ?>
-                                    <span class="badge badge-yellow"><i class="fas fa-hourglass-half"></i> Menunggu Verifikasi</span>
-                                <?php } else { ?>
-                                    <span class="badge badge-blue"><i class="fas fa-tools"></i> Sedang Dikerjakan</span>
-                                <?php } ?>
+                                <b><?= htmlspecialchars($rp['nama_tema']) ?></b><br>
+                                <span style="font-size:0.8rem; color:var(--muted);">Tgl: <?= date('d M Y', strtotime($rp['tanggal_acara'])) ?></span>
                             </td>
+                            <td style="font-weight:700; white-space:nowrap;">Rp <?= number_format($rp['total_tagihan'],0,',','.') ?></td>
+                            <td><span class="badge <?= $badge_p ?>"><?= $rp['status_pembayaran'] ?></span></td>
                             <td>
-                                <?php if($current_role == 'Super Admin') { 
-                                    // Ambil gambar screenshot dari logging terakhir untuk invoice ini
-                                    $inv = $rt['invoice'];
-                                    $q_img = mysqli_query($conn, "SELECT screenshot_path FROM audit_logs WHERE target_id='$inv' AND action_type='Update Pesanan' AND screenshot_path IS NOT NULL ORDER BY id DESC LIMIT 1");
-                                    $img_path = "";
-                                    if(mysqli_num_rows($q_img) > 0) {
-                                        $img_path = mysqli_fetch_assoc($q_img)['screenshot_path'];
-                                    }
-                                ?>
-                                    <div style="display:flex; gap:10px;">
-                                        <?php if($img_path != "") { ?>
-                                            <a href="<?= $img_path ?>" target="_blank" class="btn-action btn-secondary"><i class="fas fa-image"></i> Lihat Hasil</a>
-                                        <?php } else { ?>
-                                            <button class="btn-action" style="background:#e2e8f0; color:#94a3b8; cursor:not-allowed;" disabled><i class="fas fa-image-slash"></i> Hasil Nihil</button>
-                                        <?php } ?>
-                                        <form method="POST" action="admin.php?menu=tugas" onsubmit="return confirm('Verifikasi dan selesaikan tugas ini?');" style="margin:0;">
-                                            <input type="hidden" name="id_pesanan" value="<?= $rt['id'] ?>">
-                                            <button type="submit" name="verifikasi_tugas" class="btn-action btn-primary"><i class="fas fa-check-circle"></i> Verifikasi Selesai</button>
-                                        </form>
-                                    </div>
-                                <?php } else { ?>
-                                    <button type="button" onclick="openStaffUploadModal(<?= $rt['id'] ?>)" class="btn-action btn-primary"><i class="fas fa-upload"></i> Upload Tugas Selesai</button>
-                                <?php } ?>
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    <!-- Tombol Ubah Status Bayar -->
+                                    <button type="button" onclick="openPayModal(<?= $rp['id'] ?>, '<?= $rp['status_pembayaran'] ?>')" class="btn-action btn-primary" style="font-size:0.85rem;">
+                                        <i class="fas fa-coins"></i> Konfirmasi Bayar
+                                    </button>
+                                    <!-- Dropdown Assign Staff -->
+                                    <form method="POST" action="admin.php?menu=tugas" style="display:flex; gap:6px; align-items:center;">
+                                        <input type="hidden" name="id_pesanan" value="<?= $rp['id'] ?>">
+                                        <select name="admin_assign_id" class="form-control" style="padding:5px; flex:1; font-size:0.8rem; border-color:var(--primary);">
+                                            <option value="">-- Assign Staff --</option>
+                                            <?php foreach($list_all_staff as $sad){ ?>
+                                                <option value="<?= $sad['id'] ?>" <?= ($rp['admin_id'] == $sad['id']) ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($sad['username']) ?>
+                                                </option>
+                                            <?php } ?>
+                                        </select>
+                                        <button type="submit" name="update_assign" class="btn-action btn-secondary" title="Simpan Penugasan" style="padding:5px 10px;">
+                                            <i class="fas fa-user-check"></i>
+                                        </button>
+                                    </form>
+                                    <?php if($rp['staff_name']) { ?>
+                                        <span style="font-size:0.75rem; color:#0284c7;"><i class="fas fa-user"></i> Tg: <b><?= htmlspecialchars($rp['staff_name']) ?></b></span>
+                                    <?php } ?>
+                                </div>
                             </td>
                         </tr>
                         <?php } 
-                        if(mysqli_num_rows($q_tugas) == 0){
-                            echo "<tr><td colspan='4' style='text-align:center; padding:30px; color:var(--muted);'><i class='fas fa-check-circle fa-2x' style='margin-bottom:10px; color:#cbd5e1; display:block;'></i> Tidak ada tugas tertunda. Bagus sekali!</td></tr>";
+                        if($count_pending == 0) {
+                            echo "<tr><td colspan='5' style='text-align:center; padding:30px; color:var(--muted);'><i class='fas fa-check-circle fa-2x' style='color:#86efac; margin-bottom:10px; display:block;'></i>Semua pesanan sudah terkonfirmasi lunas!</td></tr>";
                         }
                         ?>
                     </tbody>
@@ -836,14 +925,257 @@ if($current_role == 'Super Admin') {
             </div>
         </div>
 
-        <?php if($current_role != 'Super Admin') { ?>
-        <!-- Modal Khusus Upload Staff -->
+        <!-- ====================================================
+             SUPER ADMIN: SECTION B — PENUGASAN & VERIFIKASI
+        ==================================================== -->
+        <div class="card" data-aos="fade-up" data-aos-delay="300">
+            <div class="card-header" style="background:linear-gradient(90deg,#f0fdf4,#fff); border-left:4px solid #22c55e;">
+                <i class="fas fa-tasks" style="color:#22c55e;"></i> 
+                Section B — Penugasan & Verifikasi Hasil
+                <span style="font-size:0.8rem; font-weight:400; color:var(--muted); margin-left:8px;">Pesanan LUNAS. Assign ulang jika perlu, lalu verifikasi hasil kerja staff.</span>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Invoice & Klien</th>
+                            <th>Tema & Tgl Acara</th>
+                            <th>Staff Bertugas</th>
+                            <th>Status Pengerjaan</th>
+                            <th>Aksi Assign & Verifikasi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $q_lunas = mysqli_query($conn, "SELECT p.*, k.nama_tema, a.username as staff_name 
+                            FROM pesanan p 
+                            LEFT JOIN katalog_tema k ON p.tema_id = k.id 
+                            LEFT JOIN admin_users a ON p.admin_id = a.id 
+                            WHERE p.status_pembayaran = 'Lunas' AND p.status_pengerjaan NOT IN ('Selesai')
+                            ORDER BY 
+                                CASE p.status_pengerjaan 
+                                    WHEN 'Menunggu Verifikasi' THEN 1 
+                                    WHEN 'Perlu Revisi' THEN 2
+                                    WHEN 'Sedang Dikerjakan' THEN 3 
+                                    ELSE 4 END,
+                                p.id DESC");
+                        
+                        $count_lunas = 0;
+                        while($rl = mysqli_fetch_assoc($q_lunas)) { 
+                            $count_lunas++;
+                            $badge_werk = 'badge-yellow';
+                            if($rl['status_pengerjaan'] == 'Menunggu Verifikasi') $badge_werk = 'badge-blue';
+                            if($rl['status_pengerjaan'] == 'Sedang Dikerjakan') $badge_werk = 'badge-green';
+                            if($rl['status_pengerjaan'] == 'Perlu Revisi') $badge_werk = 'badge-red';
+                        ?>
+                        <tr style="<?= $rl['status_pengerjaan'] == 'Menunggu Verifikasi' ? 'background:#eff6ff;' : '' ?>">
+                            <td>
+                                <b style="color:var(--primary);"><?= $rl['invoice'] ?></b><br>
+                                <span style="font-size:0.9rem;"><?= htmlspecialchars($rl['nama_pemesan']) ?></span><br>
+                                <a href="https://wa.me/<?= $rl['no_whatsapp'] ?>" target="_blank" style="color:#25D366; text-decoration:none; font-size:0.8rem;"><i class="fab fa-whatsapp"></i> <?= $rl['no_whatsapp'] ?></a>
+                            </td>
+                            <td>
+                                <b><?= htmlspecialchars($rl['nama_tema']) ?></b><br>
+                                <span style="font-size:0.8rem; color:var(--muted);">Tgl: <?= date('d M Y', strtotime($rl['tanggal_acara'])) ?></span>
+                            </td>
+                            <td>
+                                <?php if($rl['staff_name']) { ?>
+                                    <span class="badge badge-blue"><i class="fas fa-user"></i> <?= htmlspecialchars($rl['staff_name']) ?></span>
+                                <?php } else { ?>
+                                    <span style="color:var(--muted); font-size:0.85rem;"><i class="fas fa-user-slash"></i> Belum di-assign</span>
+                                <?php } ?>
+                            </td>
+                            <td><span class="badge <?= $badge_werk ?>"><?= $rl['status_pengerjaan'] ?></span></td>
+                            <td>
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    <!-- Re-assign Staff -->
+                                    <form method="POST" action="admin.php?menu=tugas" style="display:flex; gap:6px; align-items:center;">
+                                        <input type="hidden" name="id_pesanan" value="<?= $rl['id'] ?>">
+                                        <select name="admin_assign_id" class="form-control" style="padding:5px; flex:1; font-size:0.8rem; border-color:#22c55e;">
+                                            <option value="">-- Ganti Staff --</option>
+                                            <?php foreach($list_all_staff as $sad){ ?>
+                                                <option value="<?= $sad['id'] ?>" <?= ($rl['admin_id'] == $sad['id']) ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($sad['username']) ?>
+                                                </option>
+                                            <?php } ?>
+                                        </select>
+                                        <button type="submit" name="update_assign" class="btn-action btn-secondary" title="Simpan" style="padding:5px 10px;">
+                                            <i class="fas fa-user-edit"></i>
+                                        </button>
+                                    </form>
+                                    <?php if($rl['status_pengerjaan'] == 'Menunggu Verifikasi') { 
+                                        // Cek bukti hasil kerja staff
+                                        $inv_l = $rl['invoice'];
+                                        $q_img_l = mysqli_query($conn, "SELECT screenshot_path FROM audit_logs WHERE target_id='$inv_l' AND action_type='Upload Tugas' AND screenshot_path IS NOT NULL ORDER BY id DESC LIMIT 1");
+                                        $img_path_l = "";
+                                        if(mysqli_num_rows($q_img_l) > 0) {
+                                            $img_path_l = mysqli_fetch_assoc($q_img_l)['screenshot_path'];
+                                        }
+                                    ?>
+                                    <div style="display:flex; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:6px;">
+                                        <?php if($img_path_l) { ?>
+                                            <a href="<?= $img_path_l ?>" target="_blank" class="btn-action btn-secondary" style="font-size:0.8rem;"><i class="fas fa-image"></i> Lihat Hasil</a>
+                                        <?php } ?>
+                                        <form method="POST" action="admin.php?menu=tugas" onsubmit="return confirm('Verifikasi dan tandai tugas ini selesai?');" style="margin:0;">
+                                            <input type="hidden" name="id_pesanan" value="<?= $rl['id'] ?>">
+                                            <button type="submit" name="verifikasi_tugas" class="btn-action btn-primary" style="font-size:0.8rem; background:#22c55e;">
+                                                <i class="fas fa-check-circle"></i> Verifikasi Selesai
+                                            </button>
+                                        </form>
+                                        <button type="button" onclick="openRevisiModal(<?= $rl['id'] ?>)" class="btn-action" style="font-size:0.8rem; background:#f97316; color:white;">
+                                            <i class="fas fa-undo"></i> Kembalikan Revisi
+                                        </button>
+                                    </div>
+                                    <?php } ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php } 
+                        if($count_lunas == 0) {
+                            echo "<tr><td colspan='5' style='text-align:center; padding:30px; color:var(--muted);'><i class='fas fa-inbox fa-2x' style='color:#cbd5e1; margin-bottom:10px; display:block;'></i>Belum ada pesanan lunas yang perlu dikerjakan.</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Konfirmasi Pembayaran (untuk Section A) -->
+        <div id="modalPayStatus" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div style="background:white; padding:30px; border-radius:15px; width:420px; max-width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.15);">
+                <h3 style="margin-bottom:5px; color:var(--text);"><i class="fas fa-coins" style="color:#f97316;"></i> Konfirmasi Status Pembayaran</h3>
+                <p style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;">Ubah status pembayaran pesanan ini. Jika ditandai <b>Lunas</b>, pesanan akan otomatis pindah ke Section B.</p>
+                <form method="POST" action="admin.php?menu=tugas" enctype="multipart/form-data">
+                    <input type="hidden" name="id_pesanan" id="paymod_id_pesanan">
+                    <div class="form-group">
+                        <label>Status Pembayaran Baru</label>
+                        <select name="status_bayar" id="paymod_status" class="form-control" required>
+                            <option value="Belum Bayar">❌ Belum Bayar</option>
+                            <option value="Menunggu Konfirmasi">🕐 Menunggu Konfirmasi</option>
+                            <option value="Lunas">✅ Lunas (Konfirmasi Diterima)</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                        <button type="button" onclick="closePayModal()" class="btn-action btn-secondary">Batal</button>
+                        <button type="submit" name="update_status_pesanan" class="btn-action btn-primary"><i class="fas fa-save"></i> Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+        function openPayModal(id, status) {
+            document.getElementById('paymod_id_pesanan').value = id;
+            document.getElementById('paymod_status').value = status;
+            document.getElementById('modalPayStatus').style.display = 'flex';
+        }
+        function closePayModal() {
+            document.getElementById('modalPayStatus').style.display = 'none';
+        }
+        </script>
+
+        <!-- Modal Kembalikan Revisi (Section B) -->
+        <div id="modalRevisi" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div style="background:white; padding:30px; border-radius:15px; width:480px; max-width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.15);">
+                <h3 style="margin-bottom:5px; color:var(--text);"><i class="fas fa-undo" style="color:#f97316;"></i> Kembalikan Tugas untuk Revisi</h3>
+                <p style="color:var(--muted); font-size:0.85rem; margin-bottom:18px;">Tugas akan dikembalikan ke staff. Sertakan catatan apa yang perlu diperbaiki.</p>
+                <form method="POST" action="admin.php?menu=tugas">
+                    <input type="hidden" name="id_pesanan" id="revmod_id_pesanan">
+                    <div class="form-group">
+                        <label style="font-weight:600; color:var(--text);">📝 Catatan / Saran Revisi <span style="color:#ef4444;">*</span></label>
+                        <textarea name="catatan_revisi" id="revmod_catatan" class="form-control" rows="5" required
+                            placeholder="Contoh: Foto background terlalu gelap, tolong ganti warna font nama tamu menjadi putih, dll."
+                            style="resize:vertical; margin-top:6px; font-size:0.9rem; line-height:1.5;"></textarea>
+                        <span class="text-hint">Tuliskan detail apa yang perlu direvisi oleh staff.</span>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+                        <button type="button" onclick="closeRevisiModal()" class="btn-action btn-secondary">Batal</button>
+                        <button type="submit" name="kembalikan_revisi" class="btn-action" style="background:#f97316; color:white;">
+                            <i class="fas fa-paper-plane"></i> Kirim Revisi ke Staff
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+        function openRevisiModal(id) {
+            document.getElementById('revmod_id_pesanan').value = id;
+            document.getElementById('revmod_catatan').value = '';
+            document.getElementById('modalRevisi').style.display = 'flex';
+        }
+        function closeRevisiModal() {
+            document.getElementById('modalRevisi').style.display = 'none';
+        }
+        </script>
+
+        <?php } else { 
+            // ========================================
+            // TAMPILAN STAFF: Daftar Tugas Aktif Mereka
+            // ======================================== 
+        ?>
+        <div class="card" data-aos="fade-up" data-aos-delay="200">
+            <div class="card-header"><i class="fas fa-clipboard-list"></i> Daftar Tugas Aktif Anda</div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Klien & Tema</th>
+                            <th>Status Pengerjaan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+                        // Staff melihat semua tugas aktif: Sedang Dikerjakan DAN Perlu Revisi (belum Selesai/Menunggu Verifikasi)
+                        $q_tugas_staff = mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.admin_id='$my_id' AND p.status_pembayaran='Lunas' AND p.status_pengerjaan NOT IN ('Selesai','Menunggu Verifikasi') ORDER BY CASE p.status_pengerjaan WHEN 'Perlu Revisi' THEN 1 ELSE 2 END, p.id DESC");
+                        
+                        while($rt = mysqli_fetch_assoc($q_tugas_staff)) { 
+                            $is_revisi = ($rt['status_pengerjaan'] == 'Perlu Revisi');
+                        ?>
+                        <tr style="<?= $is_revisi ? 'background:#fff1f2;' : '' ?>">
+                            <td style="font-weight:600; color:var(--primary);"><?= $rt['invoice'] ?></td>
+                            <td>
+                                <b><?= htmlspecialchars($rt['nama_pemesan']) ?></b><br>
+                                <span style="font-size:0.85rem; color:var(--muted);"><i class="fas fa-palette"></i> <?= htmlspecialchars($rt['nama_tema']) ?></span><br>
+                                <span style="font-size:0.8rem; color:var(--muted);">Tgl Acara: <?= date('d M Y', strtotime($rt['tanggal_acara'])) ?></span>
+                                <?php if($is_revisi && !empty($rt['catatan_revisi'])) { ?>
+                                <div style="margin-top:8px; background:#fee2e2; border-left:3px solid #ef4444; border-radius:6px; padding:10px 12px;">
+                                    <div style="font-size:0.78rem; font-weight:700; color:#991b1b; margin-bottom:4px;"><i class="fas fa-exclamation-triangle"></i> CATATAN REVISI DARI SUPER ADMIN:</div>
+                                    <div style="font-size:0.85rem; color:#7f1d1d; white-space:pre-wrap;"><?= htmlspecialchars($rt['catatan_revisi']) ?></div>
+                                </div>
+                                <?php } ?>
+                            </td>
+                            <td>
+                                <?php if($is_revisi) { ?>
+                                    <span class="badge badge-red"><i class="fas fa-redo"></i> Perlu Revisi</span>
+                                <?php } else { ?>
+                                    <span class="badge badge-blue"><i class="fas fa-tools"></i> Sedang Dikerjakan</span>
+                                <?php } ?>
+                            </td>
+                            <td>
+                                <button type="button" onclick="openStaffUploadModal(<?= $rt['id'] ?>)" class="btn-action <?= $is_revisi ? '' : 'btn-primary' ?>" style="<?= $is_revisi ? 'background:#f97316; color:white;' : '' ?>">
+                                    <i class="fas fa-<?= $is_revisi ? 'redo' : 'upload' ?>"></i> 
+                                    <?= $is_revisi ? 'Upload Ulang (Revisi)' : 'Upload Tugas Selesai' ?>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php } 
+                        if(mysqli_num_rows($q_tugas_staff) == 0){
+                            echo "<tr><td colspan='4' style='text-align:center; padding:30px; color:var(--muted);'><i class='fas fa-check-circle fa-2x' style='margin-bottom:10px; color:#86efac; display:block;'></i>Tidak ada tugas aktif. Tunggu penugasan dari Super Admin.</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Upload Bukti Selesai (Staff) -->
         <div id="modalStaffUpload" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
             <div style="background:white; padding:30px; border-radius:15px; width:400px; max-width:90%;">
                 <h3 style="margin-bottom:20px; color:var(--text);"><i class="fas fa-cloud-upload-alt" style="color:var(--primary);"></i> Upload Bukti Selesai</h3>
                 <form method="POST" action="admin.php?menu=tugas" enctype="multipart/form-data">
                     <input type="hidden" name="id_pesanan" id="staff_modal_id_pesanan">
-                    
                     <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; border:1px dashed #cbd5e1;">
                         <label style="color:var(--text); font-size:0.85rem;"><i class="fas fa-file-image" style="color:#0284c7;"></i> Screenshot Hasil Pengerjaan</label>
                         <input type="file" name="bukti_selesai" class="form-control" accept="image/*" required style="margin-top:10px; padding:8px; font-size:0.85rem;">
@@ -865,7 +1197,41 @@ if($current_role == 'Super Admin') {
                 document.getElementById('modalStaffUpload').style.display = 'none';
             }
         </script>
+        <?php
+        // ── Auto popup jika ada tugas "Perlu Revisi" untuk staff ini
+        $q_revisi_notif = mysqli_query($conn, "SELECT p.invoice, p.catatan_revisi, p.nama_pemesan FROM pesanan p WHERE p.admin_id='$my_id' AND p.status_pengerjaan='Perlu Revisi' AND p.catatan_revisi != '' ORDER BY p.id DESC");
+        $list_revisi = [];
+        while($rv = mysqli_fetch_assoc($q_revisi_notif)) { $list_revisi[] = $rv; }
+        if(!empty($list_revisi)) {
+            $html_isi = '';
+            foreach($list_revisi as $rv) {
+                $catatan_escaped = htmlspecialchars($rv['catatan_revisi']);
+                $invoice_escaped = htmlspecialchars($rv['invoice']);
+                $client_escaped  = htmlspecialchars($rv['nama_pemesan']);
+                $html_isi .= "<div style='background:#fff7ed; border-left:4px solid #f97316; border-radius:8px; padding:12px 14px; margin-bottom:12px; text-align:left;'>"
+                           . "<div style='font-weight:700; color:#c2410c; font-size:0.85rem; margin-bottom:6px;'>📄 Invoice: $invoice_escaped &nbsp;|&nbsp; $client_escaped</div>"
+                           . "<div style='font-size:0.9rem; color:#1c1917; white-space:pre-wrap;'>$catatan_escaped</div>"
+                           . "</div>";
+            }
+            $jumlah = count($list_revisi);
+        ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                icon: 'warning',
+                title: '⚠️ <?= $jumlah ?> Tugas Perlu Direvisi!',
+                html: '<p style="color:#64748b; margin-bottom:14px; font-size:0.9rem;">Super Admin telah mengembalikan tugas berikut. Harap perbaiki dan upload ulang.</p>'
+                    + '<?= addslashes($html_isi) ?>',
+                confirmButtonText: 'Saya Mengerti, Segera Diperbaiki',
+                confirmButtonColor: '#f97316',
+                allowOutsideClick: false,
+                width: 560,
+            });
+        });
+        </script>
         <?php } ?>
+        <?php } ?>
+
 
         <?php } elseif($menu == 'katalog') { 
             // Cek apakah sedang dalam mode edit
@@ -1495,6 +1861,84 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             .fc-button-primary:hover { background-color: #3b4b3e !important; }
             .fc-day-today { background-color: #fefce8 !important; }
         </style>
+
+        <?php } elseif($menu == 'template') { 
+            // ==========================================
+            // HALAMAN TEMPLATE REFERENSI (Semua Role)
+            // ==========================================
+            $template_folders = [
+                'Tema Utama'   => ['path' => __DIR__ . '/tema',          'rel' => 'tema'],
+                'Tema Themes'  => ['path' => __DIR__ . '/themes/basic',   'rel' => 'themes/basic'],
+            ];
+            $base_url_tmpl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . "://$_SERVER[HTTP_HOST]" . dirname($_SERVER['PHP_SELF']);
+        ?>
+        <style>
+            .tmpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; padding: 20px; }
+            .tmpl-card { background: white; border-radius: 14px; border: 1px solid var(--border); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
+            .tmpl-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.08); }
+            .tmpl-card-top { padding: 16px 18px 12px; background: linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom: 1px solid var(--border); }
+            .tmpl-card-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: 9px; }
+            .tmpl-card-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+            .tmpl-card-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+            .tmpl-card-foot { padding: 12px 18px; display: flex; gap: 8px; }
+        </style>
+
+        <div class="page-header" data-aos="fade-down">
+            <div>
+                <h1 class="page-title"><i class="fas fa-code" style="color:var(--primary);"></i> Template Referensi</h1>
+                <p style="color:var(--muted); margin-top:5px;">Preview tampilan template dan unduh source code sebagai referensi pengerjaan.</p>
+            </div>
+        </div>
+
+        <?php foreach($template_folders as $label => $info):
+            $folder_path = $info['path'];
+            $rel         = $info['rel'];
+            $files = [];
+            if(is_dir($folder_path)) {
+                foreach(scandir($folder_path) as $f) {
+                    $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+                    if(in_array($ext, ['php','html']) && $f[0] !== '.') {
+                        $files[] = $f;
+                    }
+                }
+            }
+            if(empty($files)) continue;
+        ?>
+        <div class="card" data-aos="fade-up" data-aos-delay="100" style="margin-bottom:25px;">
+            <div class="card-header">
+                <i class="fas fa-folder-open" style="color:#f97316;"></i> <?= htmlspecialchars($label) ?>
+                <span style="margin-left:8px; font-size:0.8rem; font-weight:400; color:var(--muted);"><?= count($files) ?> file ditemukan</span>
+            </div>
+            <div class="tmpl-grid">
+                <?php foreach($files as $fname):
+                    $ext  = strtolower(pathinfo($fname, PATHINFO_EXTENSION));
+                    $fsize = file_exists($folder_path . DIRECTORY_SEPARATOR . $fname) ? round(filesize($folder_path . DIRECTORY_SEPARATOR . $fname) / 1024, 1) . ' KB' : '-';
+                    $icon_bg  = ($ext === 'php') ? '#8b5cf622' : '#0284c722';
+                    $icon_clr = ($ext === 'php') ? '#8b5cf6'   : '#0284c7';
+                    $icon_fa  = ($ext === 'php') ? 'fa-php'    : 'fa-html5';
+                    $nice_name = ucwords(str_replace(['_','-'], ' ', basename($fname, '.'.$ext)));
+                    $preview_url  = $base_url_tmpl . '/' . $rel . '/' . $fname;
+                    $download_url = 'admin.php?menu=template&dl=' . urlencode($rel . '/' . $fname);
+                ?>
+                <div class="tmpl-card">
+                    <div class="tmpl-card-top">
+                        <div class="tmpl-card-icon" style="background:<?= $icon_bg ?>; color:<?= $icon_clr ?>;"><i class="fab <?= $icon_fa ?>"></i></div>
+                        <div class="tmpl-card-name"><?= htmlspecialchars($nice_name) ?></div>
+                        <div class="tmpl-card-meta"><i class="fas fa-file-code"></i> <?= htmlspecialchars($fname) ?> &middot; <?= $fsize ?></div>
+                    </div>
+                    <div class="tmpl-card-foot">
+                        <a href="<?= htmlspecialchars($preview_url) ?>" target="_blank" class="btn-action btn-secondary" style="flex:1; justify-content:center; font-size:0.82rem;">
+                            <i class="fas fa-eye"></i> Preview
+                        </a>
+                        <a href="<?= htmlspecialchars($download_url) ?>" class="btn-action btn-primary" style="flex:1; justify-content:center; font-size:0.82rem;">
+                            <i class="fas fa-download"></i> Download Kode
+                        </a>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
 
         <?php } ?>
 

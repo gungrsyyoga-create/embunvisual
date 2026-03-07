@@ -115,13 +115,25 @@ if(isset($_POST['update_status_pesanan'])){
                 $dp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.id='$id_pesanan'"));
                 if(!empty($dp['email_pemesan'])) {
                     require_once __DIR__ . '/includes/mailer.php';
-                    $checkout_url = (isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on'?'https':'http')."://{$_SERVER['HTTP_HOST']}/" . ltrim(dirname($_SERVER['PHP_SELF']), '/') . "/invoice.php?inv=" . urlencode($dp['invoice']);
+                    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http');
+                    $host = $_SERVER['HTTP_HOST'];
+                    $dir = str_replace('\\', '/', dirname($_SERVER['PHP_SELF']));
+                    $checkout_url = "$protocol://$host" . rtrim($dir, '/') . "/invoice.php?inv=" . urlencode($dp['invoice']);
+                    
                     $body = emailLunas($dp['nama_pemesan'], $dp['invoice'], $dp['nama_tema'] ?? '-', $dp['tanggal_acara'], $dp['total_tagihan'], $checkout_url);
-                    kirimEmail($dp['email_pemesan'], $dp['nama_pemesan'], '✅ Pembayaran Dikonfirmasi - Embun Visual', $body);
+                    $mail_sent = kirimEmail($dp['email_pemesan'], $dp['nama_pemesan'], '✅ Pembayaran Dikonfirmasi - Embun Visual', $body);
+                    
+                    if($mail_sent !== true) {
+                        $_SESSION['notif_pesan'] = "Swal.fire('Perhatian!', 'Status diperbarui tp Gagal kirim email: " . addslashes($mail_sent) . "', 'warning');";
+                    } else {
+                        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status diperbarui & Email konfirmasi terkirim.', 'success');";
+                    }
+                } else {
+                    $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status diperbarui (Email klien tidak diisi)', 'success');";
                 }
+            } else {
+                $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
             }
-
-            $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
             header("Location: admin.php?menu=tugas"); exit;
         }
     } else {
@@ -181,10 +193,16 @@ if(isset($_POST['verifikasi_tugas'])){
         if(!empty($dt_lama['email_pemesan'])) {
             require_once __DIR__ . '/includes/mailer.php';
             $body = emailSelesai($dt_lama['nama_pemesan'], $dt_lama['invoice'], $dt_lama['nama_tema'] ?? '-');
-            kirimEmail($dt_lama['email_pemesan'], $dt_lama['nama_pemesan'], '🎉 Undangan Digital Anda Sudah Selesai! - Embun Visual', $body);
+            $mail_sent = kirimEmail($dt_lama['email_pemesan'], $dt_lama['nama_pemesan'], '🎉 Undangan Digital Anda Sudah Selesai! - Embun Visual', $body);
+            
+            if($mail_sent !== true) {
+                $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Tugas diverifikasi tapi Gagal kirim email: " . addslashes($mail_sent) . "', 'warning');";
+            } else {
+                $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi dan email notifikasi dikirim.', 'success');";
+            }
+        } else {
+            $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi.', 'success');";
         }
-
-        $_SESSION['notif_pesan'] = "Swal.fire('Disetujui!', 'Tugas staf telah diverifikasi dan email notifikasi dikirim.', 'success');";
         header("Location: admin.php?menu=tugas"); exit;
     }
 }

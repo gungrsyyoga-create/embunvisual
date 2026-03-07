@@ -41,22 +41,79 @@ if(isset($_SESSION['notif_pesan'])) {
     unset($_SESSION['notif_pesan']);
 }
 
-// A. Update Status Pembayaran Pesanan
+// Update Helper: Catat history ke Log
+function catatLog($conn, $admin_id, $action, $target, $keterangan, $foto = null) {
+    $action = mysqli_real_escape_string($conn, $action);
+    $target = mysqli_real_escape_string($conn, $target);
+    $ket = mysqli_real_escape_string($conn, $keterangan);
+    mysqli_query($conn, "INSERT INTO audit_logs (admin_id, action_type, target_id, keterangan, screenshot_path) VALUES ('$admin_id', '$action', '$target', '$ket', '$foto')");
+}
+
+// A. Update Status Pembayaran Pesanan (Termasuk Upload Screenshot)
 if(isset($_POST['update_status_pesanan'])){
-    $id_pesanan = $_POST['id_pesanan'];
-    $status_baru = $_POST['status_bayar'];
-    if(mysqli_query($conn, "UPDATE pesanan SET status_pembayaran='$status_baru' WHERE id='$id_pesanan'")){
-        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
+    $id_pesanan = (int)$_POST['id_pesanan'];
+    $status_baru = mysqli_real_escape_string($conn, $_POST['status_bayar']);
+    
+    // Ambil data lama
+    $dt_lama = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice, status_pembayaran FROM pesanan WHERE id='$id_pesanan'"));
+    $invoice_lama = $dt_lama['invoice'];
+    $status_awal = $dt_lama['status_pembayaran'];
+    
+    $foto_path = null;
+    
+    // Cek apakah statusnya benar berubah, jika sama tidak perlu dilog
+    if($status_baru != $status_awal) {
+        
+        // Proses upload Bukti Selesai Tugas jika Lunas
+        if($status_baru == 'Lunas' && isset($_FILES['bukti_selesai']['name']) && $_FILES['bukti_selesai']['name'] != '') {
+            $nama_file = $_FILES['bukti_selesai']['name'];
+            $tmp_file = $_FILES['bukti_selesai']['tmp_name'];
+            $ext = strtolower(pathinfo($nama_file, PATHINFO_EXTENSION));
+            $allowed = array('jpg','jpeg','png','webp');
+            
+            if(in_array($ext, $allowed)){
+                $new_name = 'bukti_'.$id_pesanan.'_'.time().'.'.$ext;
+                $upload_dir = 'uploads/audit/';
+                if(!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+                $upload_path = $upload_dir.$new_name;
+                
+                if(move_uploaded_file($tmp_file, $upload_path)){
+                    $foto_path = $upload_path;
+                }
+            } else {
+                $_SESSION['notif_pesan'] = "Swal.fire('Gagal!', 'Format foto bukti harus JPG/PNG/WEBP.', 'error');";
+                header("Location: admin.php?menu=pesanan"); exit;
+            }
+        }
+
+        if(mysqli_query($conn, "UPDATE pesanan SET status_pembayaran='$status_baru' WHERE id='$id_pesanan'")){
+            // Log activity
+            $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+            $ket_log = "Mengubah status pembayaran dari [$status_awal] menjadi [$status_baru]";
+            catatLog($conn, $my_id_log, 'Update Pesanan', $invoice_lama, $ket_log, $foto_path);
+            
+            $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Status pembayaran diperbarui.', 'success');";
+            header("Location: admin.php?menu=pesanan"); exit;
+        }
+    } else {
+        // Status tidak berubah, lempar kembali
+        $_SESSION['notif_pesan'] = "Swal.fire('Info', 'Status pembayaran tidak ada yang berubah.', 'info');";
         header("Location: admin.php?menu=pesanan"); exit;
     }
 }
 
 // A2. Update Assign Admin (Pesanan)
 if(isset($_POST['update_assign'])){
-    $id_pesanan = $_POST['id_pesanan'];
+    $id_pesanan = (int)$_POST['id_pesanan'];
     $admin_id = $_POST['admin_assign_id']; 
+    $invoice_val = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$id_pesanan'"))['invoice'];
+
     if(empty($admin_id)) $admin_id = 'NULL';
     if(mysqli_query($conn, "UPDATE pesanan SET admin_id=$admin_id WHERE id='$id_pesanan'")){
+        $my_id_log = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+        $txt_admin = ($admin_id == 'NULL') ? "Dikosongkan" : "Staff ID $admin_id";
+        catatLog($conn, $my_id_log, 'Tugaskan Staff', $invoice_val, "Menugaskan pesanan ini kepada: $txt_admin");
+        
         $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Penugasan staff diperbarui.', 'success');";
     }
     header("Location: admin.php?menu=pesanan"); exit;
@@ -331,23 +388,82 @@ if($current_role == 'Super Admin') {
         .form-control { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; outline: none; transition: all 0.2s ease; background: #fafafa; }
         .form-control:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(74,93,78,0.1); }
         .text-hint { color: var(--muted); font-size: 0.8rem; display: block; margin-top: 6px; }
+
+        /* Notification Toast */
+        .notif-toast { position: fixed; top: 20px; right: -400px; background: white; border-left: 5px solid var(--primary); box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 10px; padding: 15px 25px; display: flex; align-items: center; gap: 15px; z-index: 9999; transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .notif-toast.show { right: 20px; }
+        .notif-icon { width: 40px; height: 40px; border-radius: 50%; background: #f0fdf4; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .notif-content { flex: 1; }
+        .notif-title { font-weight: 700; color: var(--text); font-size: 0.95rem; margin-bottom: 2px; }
+        .notif-desc { color: var(--muted); font-size: 0.8rem; }
+        .notif-close { cursor: pointer; color: #94a3b8; transition: color 0.2s; }
+        .notif-close:hover { color: #ef4444; }
+        
+        /* Bell Ping Animation */
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            5% { transform: rotate(30deg); }
+            10% { transform: rotate(-28deg); }
+            15% { transform: rotate(34deg); }
+            20% { transform: rotate(-32deg); }
+            25% { transform: rotate(30deg); }
+            30% { transform: rotate(-28deg); }
+            35% { transform: rotate(26deg); }
+            40% { transform: rotate(-24deg); }
+            45% { transform: rotate(22deg); }
+            50% { transform: rotate(-20deg); }
+            55% { transform: rotate(18deg); }
+            60% { transform: rotate(-16deg); }
+            65% { transform: rotate(14deg); }
+            70% { transform: rotate(-12deg); }
+            75% { transform: rotate(10deg); }
+            80% { transform: rotate(-8deg); }
+            85% { transform: rotate(6deg); }
+            90% { transform: rotate(-4deg); }
+            95% { transform: rotate(2deg); }
+            100% { transform: rotate(0); }
+        }
+        .bell-shake { animation: ring 2s ease 1; }
     </style>
 </head>
 <body>
+
+    <!-- Notification Sound -->
+    <audio id="notifSound" preload="auto">
+        <source src="assets/sounds/notif.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Notification UI Toast -->
+    <div id="liveNotifToast" class="notif-toast">
+        <div class="notif-icon"><i class="fas fa-bell"></i></div>
+        <div class="notif-content">
+            <div class="notif-title">Pemberitahuan Baru</div>
+            <div class="notif-desc" id="notifDescText">Ada tugas baru yang perlu dicek.</div>
+        </div>
+        <i class="fas fa-times notif-close" onclick="closeNotif()"></i>
+    </div>
 
     <aside class="sidebar" data-aos="fade-right" data-aos-duration="800">
         <div class="brand"><i class="fas fa-leaf"></i> Embun Visual</div>
         
         <a href="?menu=dashboard" class="nav-item <?= $menu == 'dashboard' ? 'active' : '' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
-        <a href="?menu=pesanan" class="nav-item <?= $menu == 'pesanan' ? 'active' : '' ?>"><i class="fas fa-receipt"></i> Pesanan Masuk <?= $badge_notif ?></a>
+        <a href="?menu=pesanan" class="nav-item <?= $menu == 'pesanan' ? 'active' : '' ?>">
+            <i class="fas fa-receipt" id="navIconPesanan"></i> Pesanan Masuk 
+            <span id="badgePesanan"></span>
+            <?= $badge_notif ?>
+        </a>
         <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=katalog" class="nav-item <?= $menu == 'katalog' ? 'active' : '' ?>"><i class="fas fa-layer-group"></i> Kelola Katalog</a>
         <?php } ?>
-        <a href="?menu=request" class="nav-item <?= $menu == 'request' ? 'active' : '' ?>"><i class="fas fa-paint-brush"></i> Request Custom</a>
+        <a href="?menu=request" class="nav-item <?= $menu == 'request' ? 'active' : '' ?>">
+            <i class="fas fa-paint-brush"></i> Request Custom
+            <span id="badgeRequest"></span>
+        </a>
         <?php if($current_role == 'Super Admin') { ?>
         <a href="?menu=galeri" class="nav-item <?= $menu == 'galeri' ? 'active' : '' ?>"><i class="fas fa-images"></i> Pengaturan Galeri</a>
         <a href="?menu=admin" class="nav-item <?= $menu == 'admin' ? 'active' : '' ?>"><i class="fas fa-users-cog"></i> Kelola Admin</a>
         <?php } ?>
+        <a href="?menu=audit" class="nav-item <?= $menu == 'audit' ? 'active' : '' ?>"><i class="fas fa-history"></i> Aktivitas Log</a>
         <a href="?menu=kalender" class="nav-item <?= $menu == 'kalender' ? 'active' : '' ?>"><i class="fas fa-calendar-alt"></i> Kalender Booking</a>
         <a href="?menu=generator" class="nav-item <?= $menu == 'generator' ? 'active' : '' ?>"><i class="fas fa-magic"></i> Generator Link</a>
         
@@ -500,23 +616,18 @@ if($current_role == 'Super Admin') {
                             <td><span class="badge <?= $badge ?>"><?= $row['status_pembayaran'] ?></span></td>
                             <td style="display:flex; flex-direction:column; gap:8px;">
                                 <div style="display:flex; gap:10px; align-items:center;">
-                                    <form method="POST" style="display:flex; gap:5px;">
-                                        <input type="hidden" name="id_pesanan" value="<?= $row['id'] ?>">
-                                        <select name="status_bayar" class="form-control" style="padding:6px; width:auto; font-size:0.8rem; margin:0;">
-                                            <option value="Belum Bayar" <?= $row['status_pembayaran']=='Belum Bayar'?'selected':'' ?>>Belum Bayar</option>
-                                            <option value="Menunggu Konfirmasi" <?= $row['status_pembayaran']=='Menunggu Konfirmasi'?'selected':'' ?>>Cek Mutasi</option>
-                                            <option value="Lunas" <?= $row['status_pembayaran']=='Lunas'?'selected':'' ?>>Lunas</option>
-                                        </select>
-                                        <button type="submit" name="update_status_pesanan" class="btn-action btn-primary"><i class="fas fa-check"></i></button>
-                                    </form>
+                                    <button type="button" onclick="openUpdateModal(<?= $row['id'] ?>, '<?= $row['status_pembayaran'] ?>')" class="btn-action btn-primary"><i class="fas fa-edit"></i> Ubah Status</button>
+                                    
+                                    <?php if($current_role == 'Super Admin') { ?>
                                     <form method="POST" action="admin.php?menu=pesanan" onsubmit="return confirm('Yakin ingin menghapus pesanan ini?');">
                                         <input type="hidden" name="tabel" value="pesanan">
                                         <input type="hidden" name="id_hapus" value="<?= $row['id'] ?>">
                                         <button type="submit" name="hapus_data" class="btn-action btn-danger"><i class="fas fa-trash"></i></button>
                                     </form>
+                                    <?php } ?>
                                 </div>
                                 
-                                <?php if($current_admin == 'admin') { ?>
+                                <?php if($current_role == 'Super Admin') { ?>
                                 <form method="POST" style="display:flex; gap:6px; align-items:center; width:100%; border-top:1px dashed var(--border); padding-top:8px; margin-top:2px;">
                                     <input type="hidden" name="id_pesanan" value="<?= $row['id'] ?>">
                                     <select name="admin_assign_id" class="form-control" style="padding:4px; flex:1; font-size:0.75rem; border-color:var(--primary); font-weight:500;">
@@ -539,6 +650,58 @@ if($current_role == 'Super Admin') {
                 </table>
             </div>
         </div>
+        
+        <!-- Modal Update Status -->
+        <div id="modalUpdateStatus" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+            <div style="background:white; padding:30px; border-radius:15px; width:400px; max-width:90%;">
+                <h3 style="margin-bottom:20px; color:var(--text);"><i class="fas fa-edit" style="color:var(--primary);"></i> Update Status Pesanan</h3>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="id_pesanan" id="modal_id_pesanan">
+                    <div class="form-group">
+                        <label>Status Pembayaran</label>
+                        <select name="status_bayar" id="modal_status_bayar" class="form-control" onchange="toggleBuktiUpload()" required>
+                            <option value="Belum Bayar">Belum Bayar</option>
+                            <option value="Menunggu Konfirmasi">Menunggu Konfirmasi</option>
+                            <option value="Lunas">Lunas</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="fileUploadContainer" style="display:none; background:#f8fafc; padding:15px; border-radius:10px; border:1px dashed #cbd5e1;">
+                        <label style="color:var(--text); font-size:0.85rem;"><i class="fas fa-file-image" style="color:#0284c7;"></i> Wajib melampirkan Screenshot Bukti Transfer</label>
+                        <input type="file" name="bukti_selesai" id="bukti_selesai" class="form-control" accept="image/*" style="margin-top:10px; padding:8px; font-size:0.85rem;">
+                        <span class="text-hint">Hanya file JPG/PNG max 2MB.</span>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
+                        <button type="button" onclick="closeUpdateModal()" class="btn-action btn-secondary">Batal</button>
+                        <button type="submit" name="update_status_pesanan" class="btn-action btn-primary"><i class="fas fa-save"></i> Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        function openUpdateModal(id, currentStatus) {
+            document.getElementById('modal_id_pesanan').value = id;
+            document.getElementById('modal_status_bayar').value = currentStatus;
+            document.getElementById('modalUpdateStatus').style.display = 'flex';
+            toggleBuktiUpload();
+        }
+        function closeUpdateModal() {
+            document.getElementById('modalUpdateStatus').style.display = 'none';
+        }
+        function toggleBuktiUpload() {
+            let status = document.getElementById('modal_status_bayar').value;
+            let fileContainer = document.getElementById('fileUploadContainer');
+            let fileInput = document.getElementById('bukti_selesai');
+            
+            if(status === 'Lunas') {
+                fileContainer.style.display = 'block';
+                fileInput.setAttribute('required', 'required');
+            } else {
+                fileContainer.style.display = 'none';
+                fileInput.removeAttribute('required');
+            }
+        }
+        </script>
 
         <?php } elseif($menu == 'katalog') { 
             // Cek apakah sedang dalam mode edit
@@ -909,6 +1072,63 @@ if($current_role == 'Super Admin') {
             </div>
         </div>
         
+        <?php } elseif($menu == 'audit') { 
+            // Akses Log Aktivitas
+            // Super Admin lihat semua, Staff hanya lihat lognya sendiri
+            $my_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 1;
+            $where_audit = ($current_role != 'Super Admin') ? "WHERE a.admin_id='$my_id'" : "";
+        ?>
+        <div class="page-header" data-aos="fade-down">
+            <div>
+                <h1 class="page-title"><i class="fas fa-history" style="color:var(--primary); margin-right:10px;"></i> Riwayat Aktivitas Log (Audit Trail)</h1>
+                <p style="color: var(--muted); margin-top:5px;">Lacak seluruh pergerakan status pesanan beserta bukti hasil kerjanya.</p>
+            </div>
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari info / user...">
+            </div>
+        </div>
+
+        <div class="card" data-aos="fade-up" data-aos-delay="200">
+            <div style="overflow-x: auto;">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Waktu (WIB)</th>
+                            <th>Staff Username</th>
+                            <th>Aktivitas</th>
+                            <th>Tujuan / Invoice</th>
+                            <th>Keterangan Tambahan</th>
+                            <th>Bukti Screenshot</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $q_audit = mysqli_query($conn, "SELECT a.*, u.username as nama_admin FROM audit_logs a LEFT JOIN admin_users u ON a.admin_id = u.id $where_audit ORDER BY a.id DESC LIMIT 150");
+                        while($log = mysqli_fetch_assoc($q_audit)) { 
+                        ?>
+                        <tr>
+                            <td style="color:var(--muted); font-size:0.85rem; white-space:nowrap;"><?= date('d M Y - H:i', strtotime($log['created_at'])) ?></td>
+                            <td><span style="font-weight:700; color:var(--text);"><i class="fas fa-user-circle" style="color:#cbd5e1; margin-right:5px;"></i> <?= htmlspecialchars($log['nama_admin']) ?></span></td>
+                            <td><span class="badge badge-blue"><?= htmlspecialchars($log['action_type']) ?></span></td>
+                            <td style="font-weight:600; font-family:monospace;"><?= htmlspecialchars($log['target_id']) ?></td>
+                            <td style="font-size:0.85rem; max-width:250px;"><?= htmlspecialchars($log['keterangan']) ?></td>
+                            <td style="text-align:center;">
+                                <?php if(!empty($log['screenshot_path'])) { ?>
+                                    <a href="<?= htmlspecialchars($log['screenshot_path']) ?>" target="_blank" class="btn-action" style="background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; font-size:0.75rem; padding:6px 10px;">
+                                        <i class="fas fa-external-link-alt"></i> Lihat Bukti
+                                    </a>
+                                <?php } else { ?>
+                                    <span style="color:#cbd5e1; font-size:0.8rem; font-style:italic;">-- Tidak ada --</span>
+                                <?php } ?>
+                            </td>
+                        </tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
         <?php } elseif($menu == 'generator') { ?>
         <div class="page-header">
             <h1 class="page-title">Generator Link & Pesan WA</h1>
@@ -1171,6 +1391,71 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                 tr[i].style.display = showRow ? "" : "none";
             }
         }
+
+        // ==========================================
+        // REAL-TIME NOTIFICATION AJAX POLLING
+        // ==========================================
+        let lastNotifCount = <?= (isset($jml_menunggu) ? $jml_menunggu : 0) + (isset($jml_request) ? $jml_request : 0) ?>;
+        
+        function showNotif(pesan) {
+            document.getElementById('notifDescText').innerText = pesan;
+            let toast = document.getElementById('liveNotifToast');
+            toast.classList.add('show');
+            
+            // Play sound
+            let audio = document.getElementById('notifSound');
+            let playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log("Audio autoplay prevented by browser.");
+                });
+            }
+
+            // Bell Animation
+            let iconPesanan = document.getElementById('navIconPesanan');
+            if(iconPesanan) {
+                iconPesanan.classList.add('bell-shake');
+                setTimeout(() => { iconPesanan.classList.remove('bell-shake'); }, 2000);
+            }
+
+            setTimeout(() => { closeNotif(); }, 6000);
+        }
+
+        function closeNotif() {
+            document.getElementById('liveNotifToast').classList.remove('show');
+        }
+
+        setInterval(() => {
+            fetch('api_notif.php')
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    let newTotal = data.total_notif;
+                    
+                    // Update badges if they change
+                    if(data.detail.menunggu_konfirmasi > 0) {
+                        document.getElementById('badgePesanan').innerHTML = `<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>${data.detail.menunggu_konfirmasi}</span>`;
+                    } else {
+                        document.getElementById('badgePesanan').innerHTML = "";
+                    }
+
+                    if(data.detail.request_baru > 0 && document.getElementById('badgeRequest')) {
+                        document.getElementById('badgeRequest').innerHTML = `<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>${data.detail.request_baru}</span>`;
+                    } else if (document.getElementById('badgeRequest')) {
+                        document.getElementById('badgeRequest').innerHTML = "";
+                    }
+
+                    // Trigger alert if there's a new item
+                    if(newTotal > lastNotifCount) {
+                        let diff = newTotal - lastNotifCount;
+                        showNotif(`Ada ${diff} pembaruan pesanan/request menunggu Anda!`);
+                    }
+                    lastNotifCount = newTotal;
+                }
+            })
+            .catch(error => console.log('Polling error:', error));
+        }, 10000); // Check every 10 seconds
+
     </script>
 </body>
 </html>

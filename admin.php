@@ -16,6 +16,16 @@ if(!isset($_SESSION['admin_embun'])) {
     exit;
 }
 
+// Timeout session idle PHP (15 menit = 900 detik)
+$timeout_duration = 900;
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout_duration) {
+    session_unset();
+    session_destroy();
+    header("Location: login.php?msg=timeout");
+    exit;
+}
+$_SESSION['last_activity'] = time();
+
 if(isset($_GET['logout'])) {
     session_destroy();
     header("Location: login.php");
@@ -256,54 +266,71 @@ if($current_role == 'Super Admin') {
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --primary: #4A5D4E; --bg: #F4F6F3; --surface: #FFFFFF; --text: #1E293B; --muted: #64748B; --border: #E2E8F0; }
+        :root { --primary: #4A5D4E; --bg: #F0F4F2; --surface: #FFFFFF; --text: #1E293B; --muted: #64748B; --border: #E8EDE9; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+        body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; font-size: 15px; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .sidebar { width: 280px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-right: none; box-shadow: 2px 0 20px rgba(0,0,0,0.03); padding: 30px 25px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 10; transition: all 0.3s ease; }
+        .brand { font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 45px; display: flex; align-items: center; gap: 12px; letter-spacing: -0.5px; }
+        .brand i { background: var(--primary); color: white; padding: 8px; border-radius: 10px; font-size: 1.1rem; box-shadow: 0 4px 10px rgba(74,93,78,0.2); }
         
-        .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 25px 20px; display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 10; }
-        .brand { font-size: 1.4rem; font-weight: 700; color: var(--primary); margin-bottom: 40px; display: flex; align-items: center; gap: 10px; }
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: var(--muted); text-decoration: none; border-radius: 10px; font-weight: 500; margin-bottom: 8px; transition: 0.2s; }
-        .nav-item:hover { background: #f8fafc; color: var(--primary); }
-        .nav-item.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(74,93,78,0.2); }
+        .nav-item { display: flex; align-items: center; gap: 14px; padding: 15px 18px; color: var(--muted); text-decoration: none; border-radius: 12px; font-weight: 600; margin-bottom: 8px; transition: all 0.25s ease; font-size: 0.95rem; }
+        .nav-item i { font-size: 1.1rem; width: 20px; text-align: center; }
+        .nav-item:hover { background: #f8fafc; color: var(--primary); transform: translateX(5px); }
+        .nav-item.active { background: var(--primary); color: white; box-shadow: 0 8px 16px rgba(74,93,78,0.25); }
         
-        .main { flex: 1; margin-left: 260px; padding: 40px; }
-        .page-header { margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .page-title { font-size: 1.8rem; font-weight: 700; color: var(--text); }
+        .main { flex: 1; margin-left: 280px; padding: 45px 50px; transition: all 0.3s ease; }
+        .page-header { margin-bottom: 35px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .page-title { font-size: 1.9rem; font-weight: 800; color: var(--text); letter-spacing: -0.5px; margin-bottom: 5px; }
         
-        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
-        .stat-card { background: var(--surface); padding: 25px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-        .stat-title { font-size: 0.9rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-        .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); }
+        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 45px; }
+        .stat-card { background: var(--surface); padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.03); transition: transform 0.3s ease, box-shadow 0.3s ease; position: relative; overflow: hidden; }
+        .stat-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.06); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: linear-gradient(90deg, var(--primary), #a3b1a5); opacity: 0; transition: opacity 0.3s ease; }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-title { font-size: 0.85rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; position: relative; z-index: 2; }
+        .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--text); position: relative; z-index: 2; display: flex; align-items: center; }
+        .stat-value i { opacity: 0.1 !important; font-size: 4.5rem !important; color: var(--primary) !important; position: absolute; right: -10px; bottom: -10px; z-index: 1; }
         
-        .card { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 30px; }
-        .card-header { padding: 20px 25px; border-bottom: 1px solid var(--border); background: #fafafa; font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 15px 25px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
-        th { font-weight: 600; color: var(--muted); background: white; }
+        .card { background: var(--surface); border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 35px; }
+        .card-header { padding: 22px 30px; border-bottom: 1px solid var(--border); background: white; font-weight: 700; font-size: 1.1rem; color: var(--text); display: flex; align-items: center; gap: 10px; }
+        .card-header i { color: var(--primary); }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        th, td { padding: 18px 30px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+        th { font-weight: 700; color: var(--muted); background: #fdfdfd; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; }
+        tbody tr { transition: background 0.2s ease; }
+        tbody tr:hover { background: #fbfcfa; }
         
-        .badge { padding: 6px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 600; }
+        .badge { padding: 6px 14px; border-radius: 50px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
         .badge-green { background: #dcfce7; color: #166534; }
         .badge-red { background: #fee2e2; color: #991b1b; }
         .badge-yellow { background: #fef9c3; color: #854d0e; }
         .badge-blue { background: #e0f2fe; color: #075985; }
         
-        .btn-action { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.85rem; transition: 0.2s; display:inline-flex; align-items:center; gap:5px; text-decoration:none;}
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: #3b4b3e; }
+        .btn-action { padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease; display:inline-flex; align-items:center; gap:8px; text-decoration:none; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 10px rgba(74,93,78,0.2); }
+        .btn-primary:hover { background: #3b4b3e; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(74,93,78,0.3); }
         .btn-danger { background: #fee2e2; color: #dc2626; }
         .btn-danger:hover { background: #fecaca; }
-        .btn-secondary { background: #e2e8f0; color: #334155; }
-        .btn-secondary:hover { background: #cbd5e1; }
+        .btn-secondary { background: #f1f5f9; color: #334155; }
+        .btn-secondary:hover { background: #e2e8f0; }
         
-        .search-box { position: relative; max-width: 300px; display: inline-block; width: 100%; margin-top: 10px; }
-        .search-box i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--muted); }
-        .search-box input { width: 100%; padding: 10px 15px 10px 40px; border: 1px solid var(--border); border-radius: 50px; font-family: inherit; outline: none; transition: 0.3s; font-size: 0.85rem; }
-        .search-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,93,78,0.1); }
+        .search-box { position: relative; max-width: 320px; display: inline-block; width: 100%; margin-top: 10px; }
+        .search-box i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+        .search-box input { width: 100%; padding: 12px 18px 12px 45px; border: 1px solid transparent; border-radius: 50px; font-family: inherit; outline: none; transition: 0.3s; font-size: 0.9rem; background: #f1f5f9; font-weight: 500; }
+        .search-box input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(74,93,78,0.1); }
         
-        .form-group { margin-bottom: 15px; }
-        .form-control { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; outline: none; }
-        .form-control:focus { border-color: var(--primary); }
-        .text-hint { color: var(--muted); font-size: 0.8rem; display: block; margin-top: 5px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem; color: var(--text); }
+        .form-control { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; outline: none; transition: all 0.2s ease; background: #fafafa; }
+        .form-control:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(74,93,78,0.1); }
+        .text-hint { color: var(--muted); font-size: 0.8rem; display: block; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -333,9 +360,18 @@ if($current_role == 'Super Admin') {
     <main class="main">
         
         <?php if($menu == 'dashboard') { ?>
-        <div class="page-header" data-aos="fade-down">
+        <div class="welcome-banner" data-aos="fade-down" style="background: linear-gradient(135deg, var(--primary) 0%, #354538 100%); color: white; padding: 35px 40px; border-radius: 20px; margin-bottom: 35px; box-shadow: 0 10px 30px rgba(74,93,78,0.25); display: flex; align-items: center; justify-content: space-between; position: relative; overflow: hidden;">
+            <div style="position: relative; z-index: 2;">
+                <h1 style="font-size: 2rem; margin-bottom: 8px; font-weight: 700;">Halo, <?= htmlspecialchars($current_admin) ?>! 👋</h1>
+                <p style="opacity: 0.9; margin: 0; font-size: 1.05rem;">Selamat datang kembali di panel kontrol admin Embun Visual. Semoga harimu menyenangkan!</p>
+            </div>
+            <div style="font-size: 8rem; position: absolute; right: 20px; bottom: -30px; opacity: 0.1; color: white; transform: rotate(-15deg); z-index: 1;">
+                <i class="fas fa-leaf"></i>
+            </div>
+        </div>
+        
+        <div class="page-header" data-aos="fade-down" data-aos-delay="50">
             <h1 class="page-title">Ikhtisar Bisnis</h1>
-            <p style="color: var(--muted);">Selamat datang kembali <b><?= htmlspecialchars($current_admin) ?></b>, pantau performa Embun Visual hari ini.</p>
         </div>
 
         <div class="grid-stats">
@@ -1071,6 +1107,40 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
 
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
+        // ==========================================
+        // AUTO LOGOUT JIKA TIDAK ADA INTERAKSI (15 MENIT)
+        // ==========================================
+        let inactivityTime = function () {
+            let time;
+            // 15 Menit = 900.000 ms
+            const timeoutMillis = 900000;
+
+            function logout() {
+                Swal.fire({
+                    title: 'Sesi Berakhir!',
+                    text: 'Anda terlalu lama tidak aktif. Untuk keamanan, sistem akan mengeluarkan Anda.',
+                    icon: 'warning',
+                    showConfirmButton: false,
+                    timer: 3500,
+                    timerProgressBar: true
+                }).then(() => {
+                    window.location.href = 'admin.php?logout=true';
+                });
+            }
+
+            function resetTimer() {
+                clearTimeout(time);
+                time = setTimeout(logout, timeoutMillis);
+            }
+
+            window.onload = resetTimer;
+            document.onmousemove = resetTimer;
+            document.onkeypress = resetTimer;
+            document.onclick = resetTimer;
+            document.onscroll = resetTimer;
+        };
+        inactivityTime();
+
         // Init AOS Animations
         AOS.init({ once: true, duration: 800, offset: 50 });
 

@@ -1,0 +1,51 @@
+--- pesanan ---
+id - int(11)
+invoice - varchar(20)
+nama_pemesan - varchar(100)
+email_pemesan - varchar(255)
+no_whatsapp - varchar(20)
+tema_id - int(11)
+tanggal_acara - date
+total_tagihan - int(11)
+status_pembayaran - enum('Belum Bayar','Menunggu Konfirmasi','Lunas')
+status_pengerjaan - enum('Pending','Proses Desain','Sedang Dikerjakan','Menunggu Verifikasi','Perlu Revisi','Selesai')
+catatan_revisi - text
+tanggal_order - timestamp
+admin_id - int(11)
+
+--- klien_premium ---
+id - int(11)
+pesanan_id - int(11)
+username - varchar(100)
+password - varchar(255)
+is_active - tinyint(1)
+created_by - int(11)
+created_at - timestamp
+tipe - enum('Premium','Exclusive')
+
+--- admin_users ---
+id - int(11)
+username - varchar(50)
+password - varchar(255)
+role - enum('Super Admin','Staff')
+
+--- katalog_tema ---
+id - int(11)
+nama_tema - varchar(100)
+kategori - varchar(50)
+harga - int(11)
+deskripsi - text
+gambar_url - text
+slug_demo - varchar(100)
+status - enum('Aktif','Draft')
+
+--- tamu_undangan ---
+id - int(11)
+pesanan_id - int(11)
+nama_tamu - varchar(200)
+no_whatsapp - varchar(30)
+status_rsvp - enum('Belum Konfirmasi','Hadir','Tidak Hadir')
+jumlah_hadir - int(11)
+status_kirim - enum('Belum','Terkirim')
+created_at - timestamp
+

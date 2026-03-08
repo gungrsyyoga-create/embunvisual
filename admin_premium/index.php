@@ -24,10 +24,12 @@ $nama_staff = $_SESSION['klien_nama_staff'] ?? 'Tim Embun Visual';
 
 
 // Refresh status & tier dari DB
-$q_update = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.status_pembayaran, p.status_pengerjaan, p.catatan_revisi, kp.tipe as tier FROM pesanan p LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pesanan_id'"));
+$q_update = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.status_pembayaran, p.status_pengerjaan, p.catatan_revisi, kp.tipe as tier, kp.folder_path FROM pesanan p LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pesanan_id'"));
 if ($q_update) { $st_bayar = $q_update['status_pembayaran']; $st_kerja = $q_update['status_pengerjaan']; }
-$tier = $q_update['tier'] ?? 'Premium';
+$tier = $q_update['tier'] ?? 'Basic';
+$folder_path = $q_update['folder_path'] ?? '';
 $is_exclusive = ($tier === 'Exclusive');
+$is_basic = ($tier === 'Basic');
 
 // Progress step mapping
 $steps = ['Belum Dimulai' => 1, 'Dikerjakan' => 2, 'Perlu Revisi' => 2, 'Menunggu Verifikasi' => 3, 'Selesai' => 4];
@@ -261,6 +263,10 @@ $hitung_mundur = max(0, (int)$diff);
             <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:linear-gradient(135deg,#D4AF37,#B8960C); color:#fff; padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:700; letter-spacing:1px;">
                 <i class="fas fa-gem" style="font-size:0.65rem;"></i> EXCLUSIVE
             </div>
+            <?php elseif($is_basic): ?>
+            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:#64748b; color:#fff; padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:700; letter-spacing:1px;">
+                <i class="fas fa-user" style="font-size:0.65rem;"></i> BASIC
+            </div>
             <?php else: ?>
             <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:var(--primary); color:#fff; padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:700; letter-spacing:1px;">
                 <i class="fas fa-crown" style="font-size:0.65rem;"></i> PREMIUM
@@ -268,6 +274,11 @@ $hitung_mundur = max(0, (int)$diff);
             <?php endif; ?>
         </div>
         <nav>
+            <?php if(!empty($folder_path)): ?>
+            <a href="/embunvisual/<?= $folder_path ?>" target="_blank" class="nav-item" style="color:var(--gold); border: 1px solid rgba(212,175,55,0.3); margin-bottom:15px; background:rgba(212,175,55,0.05);">
+                <i class="fas fa-external-link-alt"></i> Lihat Undangan
+            </a>
+            <?php endif; ?>
             <a class="nav-item active" onclick="showSection('beranda', this)">
                 <i class="fas fa-home"></i> Dashboard
             </a>

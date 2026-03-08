@@ -1,6 +1,7 @@
 <?php
 // Full Exclusive Invitation - Yoga & Ayu
 // Linked to Order ID 22 (Invoice: INV-20260307-988)
+require_once dirname(__DIR__) . "/config.php";
 $pesanan_id = 22; 
 $tamu_nama = isset($_GET['to']) ? $_GET['to'] : 'Tamu Undangan';
 ?>
@@ -147,39 +148,120 @@ $tamu_nama = isset($_GET['to']) ? $_GET['to'] : 'Tamu Undangan';
     <section class="hero">
         <div class="hero-bg"></div>
         <div class="hero-content" id="heroContent">
-            <p style="letter-spacing: 8px; text-transform: uppercase;">The Wedding Of</p>
+            <p style="letter-spacing: 12px; text-transform: uppercase; font-size: 0.8rem; opacity: 0.8;">The Royal Wedding of</p>
             <h2 class="hero-names">Yoga & Ayu</h2>
-            <div style="font-family: var(--font-serif); font-size: 1.2rem; opacity: 0.8;">12 . 12 . 2026</div>
+            <div style="font-family: var(--font-serif); font-size: 1.4rem; letter-spacing: 5px; opacity: 0.9; margin-top: 20px;">12 . 12 . 2026</div>
+            <div style="margin-top: 30px; font-family: var(--font-sans); font-size: 0.75rem; letter-spacing: 3px; color: var(--gold-primary); text-transform: uppercase;">Bali International Convention Centre</div>
         </div>
     </section>
 
-    <!-- INTRO -->
+    <!-- INTRO & QUOTE -->
     <section class="section" data-aos="fade-up">
-        <h2 class="sec-title"><span>Welcome to Our</span> Exclusive Day</h2>
-        <p style="font-style: italic; line-height: 1.8; color: var(--text-muted);">"Cinta tidak terlihat dengan mata, melainkan dengan hati." — William Shakespeare</p>
-        <div style="margin-top: 50px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;" id="timer">
-            <!-- Simplified countdown boxes -->
-            <div style="background: var(--bg-card); padding: 15px; border-radius: 10px;"><span id="days" style="font-size: 1.5rem; color: var(--gold-primary); display: block;">00</span><small>HARI</small></div>
-            <div style="background: var(--bg-card); padding: 15px; border-radius: 10px;"><span id="hours" style="font-size: 1.5rem; color: var(--gold-primary); display: block;">00</span><small>JAM</small></div>
-            <div style="background: var(--bg-card); padding: 15px; border-radius: 10px;"><span id="mins" style="font-size: 1.5rem; color: var(--gold-primary); display: block;">00</span><small>MENIT</small></div>
-            <div style="background: var(--bg-card); padding: 15px; border-radius: 10px;"><span id="secs" style="font-size: 1.5rem; color: var(--gold-primary); display: block;">00</span><small>DETIK</small></div>
+        <div style="max-width: 650px; margin: 0 auto;">
+            <i class="fas fa-dove" style="font-size: 2rem; color: var(--gold-primary); margin-bottom: 30px; opacity: 0.5;"></i>
+            <h2 class="sec-title" style="margin-bottom: 20px;"><span>A New Chapter</span> Begins</h2>
+            <p style="font-style: italic; line-height: 2; padding: 20px; color: #ddd; border-left: 1px solid var(--gold-primary); border-right: 1px solid var(--gold-primary); background: rgba(255,255,255,0.02);">
+                "Truly, in the end, we belong to Allah and to Him we shall return. Our journey together starts with Bismillah, and with your presence and prayers, it becomes an even more profound blessing."
+            </p>
+            <p style="margin-top: 30px; font-size: 0.8rem; letter-spacing: 4px; color: var(--gold-primary);">(Ar-Rum: 21)</p>
+        </div>
+
+        <!-- COUNTDOWN TIMER -->
+        <div style="margin-top: 60px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;" id="timer">
+            <div style="background: var(--bg-card); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.1);">
+                <span id="days" style="font-size: 2rem; color: var(--gold-primary); display: block; font-weight: 700;">00</span>
+                <small style="letter-spacing: 2px;">HARI</small>
+            </div>
+            <div style="background: var(--bg-card); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.1);">
+                <span id="hours" style="font-size: 2rem; color: var(--gold-primary); display: block; font-weight: 700;">00</span>
+                <small style="letter-spacing: 2px;">JAM</small>
+            </div>
+            <div style="background: var(--bg-card); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.1);">
+                <span id="mins" style="font-size: 2rem; color: var(--gold-primary); display: block; font-weight: 700;">00</span>
+                <small style="letter-spacing: 2px;">MENIT</small>
+            </div>
+            <div style="background: var(--bg-card); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.1);">
+                <span id="secs" style="font-size: 2rem; color: var(--gold-primary); display: block; font-weight: 700;">00</span>
+                <small style="letter-spacing: 2px;">DETIK</small>
+            </div>
         </div>
     </section>
 
-    <!-- COUPLE -->
+    <!-- MEMPELAI -->
     <section class="section">
-        <h2 class="sec-title" data-aos="fade-up"><span>Mempelai</span> Berbahagia</h2>
+        <h2 class="sec-title" data-aos="fade-up"><span>Sang</span> Mempelai</h2>
         <div class="couple-grid">
-            <div class="couple-item" data-aos="fade-right">
-                <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80" class="couple-img">
-                <h3 class="couple-name">Yoga Pratama</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">Putra dari Bpk. X & Ibu Y</p>
+            <div class="couple-item" data-aos="fade-up" data-aos-delay="100">
+                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80" class="couple-img">
+                <h3 class="couple-name">Yoga Pratama, S.T.</h3>
+                <p style="color: var(--gold-primary); font-size: 0.8rem; letter-spacing: 2px; margin: 10px 0;">PUTRA PERTAMA</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Bpk. Wayan Sudarta & Ibu Ketut Sari</p>
+                <p style="margin-top: 15px; font-size: 1.2rem; color: #555;"><i class="fab fa-instagram"></i> @yogapratama</p>
             </div>
-            <div class="couple-item" data-aos="fade-left">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" class="couple-img">
-                <h3 class="couple-name">Ayu Lestari</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">Putri dari Bpk. A & Ibu B</p>
+            <div class="couple-item" data-aos="fade-up" data-aos-delay="300">
+                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=500&q=80" class="couple-img">
+                <h3 class="couple-name">Ayu Lestari, S.E.</h3>
+                <p style="color: var(--gold-primary); font-size: 0.8rem; letter-spacing: 2px; margin: 10px 0;">PUTRI BUNGSU</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Bpk. Nyoman Gede & Ibu Luh Putu</p>
+                <p style="margin-top: 15px; font-size: 1.2rem; color: #555;"><i class="fab fa-instagram"></i> @ayulestari</p>
             </div>
+        </div>
+    </section>
+
+    <!-- STORY -->
+    <section class="section story-section">
+        <h2 class="sec-title" data-aos="fade-up"><span>Our Love</span> Roadmap</h2>
+        <div class="story-box" data-aos="fade-up">
+            <div class="story-item">
+                <div class="story-year">2018</div>
+                <h4 style="color: var(--gold-light);">The First Encounter</h4>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Dipertemukan di bangku kuliah, berawal dari tugas kelompok yang membawa kami pada obrolan panjang di perpustakaan.</p>
+            </div>
+            <div class="story-item">
+                <div class="story-year">2021</div>
+                <h4 style="color: var(--gold-light);">Commitment</h4>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Setelah melewati pasang surut kehidupan, kami memutuskan untuk menjalin hubungan yang lebih serius dan saling mendukung impian masing-masing.</p>
+            </div>
+            <div class="story-item">
+                <div class="story-year">2025</div>
+                <h4 style="color: var(--gold-light);">Engagement</h4>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Di hadapan kedua keluarga besar, kami resmi bertunangan dan memohon doa restu untuk melangkah ke pelaminan.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section class="section">
+        <h2 class="sec-title" data-aos="fade-up"><span>Exclusive</span> Moments</h2>
+        <div class="gallery-grid" data-aos="fade-up">
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=600&q=80"></div>
+            <div class="gallery-item" style="grid-column: span 2; height: 300px;"><img src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"></div>
+            <div class="gallery-item" style="grid-column: span 2; height: 300px;"><img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1200&q=80"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=600&q=80"></div>
+        </div>
+    </section>
+
+    <!-- EVENT DETAILS -->
+    <section class="section" style="background: #080808;">
+        <h2 class="sec-title" data-aos="fade-up"><span>The</span> Celebration</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; margin-top: 50px;">
+            <div class="couple-item" style="min-width: 320px;" data-aos="fade-right">
+                <i class="fas fa-ring" style="font-size: 2rem; color: var(--gold-primary); margin-bottom: 20px;"></i>
+                <h3 style="font-family: var(--font-serif); margin-bottom: 10px;">Ceremony</h3>
+                <p style="font-weight: 600; font-size: 1.1rem;">Sabtu, 12 Desember 2026</p>
+                <p style="margin: 5px 0 20px; color: var(--text-muted);">09:00 - 10:30 WITA</p>
+                <p style="font-size: 0.9rem; line-height: 1.6;">Bali International Convention Centre<br>Nusa Dua, Kuta Selatan, Bali</p>
+            </div>
+            <div class="couple-item" style="min-width: 320px;" data-aos="fade-left">
+                <i class="fas fa-glass-cheers" style="font-size: 2rem; color: var(--gold-primary); margin-bottom: 20px;"></i>
+                <h3 style="font-family: var(--font-serif); margin-bottom: 10px;">Reception</h3>
+                <p style="font-weight: 600; font-size: 1.1rem;">Sabtu, 12 Desember 2026</p>
+                <p style="margin: 5px 0 20px; color: var(--text-muted);">11:30 - 15:00 WITA</p>
+                <p style="font-size: 0.9rem; line-height: 1.6;">Grand Ballroom<br>Nusa Dua, Kuta Selatan, Bali</p>
+            </div>
+        </div>
+        <div style="margin-top: 40px;" data-aos="fade-up">
+            <a href="https://maps.google.com" target="_blank" class="btn-luxury"><i class="fas fa-map-marker-alt" style="margin-right: 10px;"></i> Penunjuk Lokasi</a>
         </div>
     </section>
 

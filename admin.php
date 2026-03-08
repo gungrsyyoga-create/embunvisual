@@ -401,24 +401,67 @@ if(isset($_POST['hapus_data'])){
     header("Location: admin.php?menu=$hal"); exit;
 }
 
-// G. BUAT / UPDATE Akun Premium Klien
+// G. BUAT / UPDATE Akun Premium/Portal Klien
 if(isset($_POST['buat_akun_premium'])) {
     if($current_role != 'Super Admin') { header("Location: admin.php"); exit; }
     $pesanan_id = (int)$_POST['pesanan_id_prem'];
     $uname = mysqli_real_escape_string($conn, trim($_POST['prem_username']));
-    $pass  = md5($_POST['prem_password']);
-    $tipe  = mysqli_real_escape_string($conn, $_POST['prem_tipe'] ?? 'Premium');
+    $pass  = !empty($_POST['prem_password']) ? md5($_POST['prem_password']) : null;
+    $tipe  = mysqli_real_escape_string($conn, $_POST['prem_tipe'] ?? 'Basic');
+    $folder = mysqli_real_escape_string($conn, trim($_POST['prem_folder'] ?? ''));
     
     // Upsert: insert or update
-    $cek = mysqli_query($conn, "SELECT id FROM klien_premium WHERE pesanan_id='$pesanan_id'");
+    $cek = mysqli_query($conn, "SELECT id, password FROM klien_premium WHERE pesanan_id='$pesanan_id'");
     if (mysqli_num_rows($cek) > 0) {
-        mysqli_query($conn, "UPDATE klien_premium SET username='$uname', password='$pass', tipe='$tipe', is_active=1 WHERE pesanan_id='$pesanan_id'");
-        $_SESSION['notif_pesan'] = "Swal.fire('Diperbarui!', 'Akun Premium & Tier berhasil diperbarui.', 'success');";
+        $row = mysqli_fetch_assoc($cek);
+        $final_pass = $pass ? $pass : $row['password'];
+        mysqli_query($conn, "UPDATE klien_premium SET username='$uname', password='$final_pass', tipe='$tipe', folder_path='$folder', is_active=1 WHERE pesanan_id='$pesanan_id'");
+        $_SESSION['notif_pesan'] = "Swal.fire('Diperbarui!', 'Akun Portal & Tier berhasil diperbarui.', 'success');";
     } else {
-        mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, tipe, created_by) VALUES ('$pesanan_id', '$uname', '$pass', '$tipe', '$my_id')");
-        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Akun Premium & Tier klien berhasil dibuat.', 'success');";
+        $final_pass = $pass ? $pass : md5('123456'); // Default password if empty on new
+        mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, tipe, folder_path, created_by) VALUES ('$pesanan_id', '$uname', '$final_pass', '$tipe', '$folder', '$my_id')");
+        $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Akun Portal & Tier klien berhasil dibuat.', 'success');";
     }
     header("Location: admin.php?menu=premium"); exit;
+}
+
+// G2. Generate Folder Action
+if(isset($_POST['action']) && $_POST['action'] == 'generate_folder') {
+    if($current_role != 'Super Admin') { echo json_encode(['status'=>'error','message'=>'Unauthorized']); exit; }
+    $pid = (int)$_POST['pid'];
+    $q = mysqli_query($conn, "SELECT p.nama_pemesan, k.slug_demo, kp.tipe FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id=k.id LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pid'");
+    $d = mysqli_fetch_assoc($q);
+    
+    if(!$d || empty($d['slug_demo'])) {
+        echo json_encode(['status'=>'error','message'=>'Tema belum dipilih atau pesanan tidak ditemukan.']); exit;
+    }
+    
+    $clean_name = strtolower(preg_replace('/[^a-zA-Z0-9]/', '-', $d['nama_pemesan']));
+    $tier = strtolower($d['tipe'] ?? 'basic');
+    $target_dir = "undangan/$tier/$clean_name";
+    
+    if(!is_dir("undangan")) mkdir("undangan");
+    if(!is_dir("undangan/$tier")) mkdir("undangan/$tier");
+    if(!is_dir($target_dir)) mkdir($target_dir, 0777, true);
+    
+    $theme_file = "tema/" . $d['slug_demo'];
+    if(file_exists($theme_file)) {
+        $content = file_get_contents($theme_file);
+        // Update the relative path for config/includes
+        $content = str_replace('dirname(__DIR__) . "/config.php"', 'dirname(dirname(dirname(__DIR__))) . "/config.php"', $content);
+        $content = str_replace('../api_rsvp.php', '../../api_rsvp.php', $content);
+        $content = str_replace('../config.php', '../../config.php', $content);
+        
+        // Inject original pesanan_id if it's hardcoded (like in the example) or use dynamic
+        // For simplicity, we assume the templates use $pesanan_id variable
+        $content = preg_replace('/\$pesanan_id = \d+;/', "\$pesanan_id = $pid;", $content);
+        
+        file_put_contents("$target_dir/index.php", $content);
+        echo json_encode(['status'=>'ok', 'path'=>$target_dir]);
+    } else {
+        echo json_encode(['status'=>'error','message'=>'File tema tidak ditemukan: '.$theme_file]);
+    }
+    exit;
 }
 
 // H. Balas Chat dari Admin / Staff
@@ -2308,7 +2351,7 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                                     <?php endif; ?>
                                 </td>
                                 <td style="white-space:nowrap;">
-                                    <button onclick="openPremModal(<?= $po['id'] ?>, '<?= htmlspecialchars($po['invoice'], ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_user'] ?? '', ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_tier'] ?? 'Premium', ENT_QUOTES) ?>')" class="btn-action btn-primary" style="font-size:0.82rem; background:#4A5D4E; border:none; margin-bottom:5px;">
+                                    <button onclick="openPremModal(<?= $po['id'] ?>, '<?= htmlspecialchars($po['invoice'], ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_user'] ?? '', ENT_QUOTES) ?>', '<?= htmlspecialchars($po['prem_tier'] ?? 'Basic', ENT_QUOTES) ?>', '<?= htmlspecialchars($po['folder_path'] ?? '', ENT_QUOTES) ?>')" class="btn-action btn-primary" style="font-size:0.82rem; background:#4A5D4E; border:none; margin-bottom:5px;">
                                         <i class="fas fa-key"></i> <?= $po['kp_id'] ? 'Edit Akun' : 'Buat Akun' ?>
                                     </button>
                                     <a href="?menu=premium&pid=<?= $po['id'] ?>" class="btn-action btn-secondary" style="font-size:0.82rem; display:inline-flex;">
@@ -2376,54 +2419,99 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
 
         <!-- Modal Buat/Edit Akun Premium -->
         <div id="modalPremium" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
-            <div style="background:white; padding:35px; border-radius:18px; width:440px; max-width:90%; box-shadow:0 40px 80px rgba(0,0,0,0.2); border-top:4px solid #D4AF37;">
+            <div style="background:white; padding:35px; border-radius:18px; width:480px; max-width:95%; box-shadow:0 40px 80px rgba(0,0,0,0.2); border-top:4px solid #D4AF37;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h3 style="color:var(--text);"><i class="fas fa-crown" style="color:#D4AF37;"></i> Akun Premium Klien</h3>
+                    <h3 style="color:var(--text);"><i class="fas fa-crown" style="color:#D4AF37;"></i> Akun Portal Klien</h3>
                     <button onclick="closePremModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--muted);">&times;</button>
                 </div>
                 <p id="premModalInvoice" style="font-size:0.8rem; color:var(--muted); margin-bottom:20px; padding:8px 12px; background:#f8f9fa; border-radius:8px; font-family:monospace;"></p>
                 <form method="POST" action="admin.php?menu=premium">
                     <input type="hidden" name="pesanan_id_prem" id="premPesananId">
-                    <div class="form-group">
-                        <label>Tipe Akun (Tier)</label>
-                        <select name="prem_tipe" id="premTipe" class="form-control" required>
-                            <option value="Premium">Standard Premium</option>
-                            <option value="Exclusive">Exclusive Tier (Gold Badge)</option>
-                        </select>
-                        <span class="text-hint">Tier menentukan badge dan fitur khusus di dashboard klien.</span>
-                    </div>
-                    <div class="form-group">
-                        <label>Username Klien</label>
-                        <input type="text" name="prem_username" id="premUsername" class="form-control" placeholder="contoh: romeo_juliet" required>
-                        <span class="text-hint">Klien akan login dengan username ini di portal premium.</span>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div class="form-group">
+                            <label>Tipe Akun (Tier)</label>
+                            <select name="prem_tipe" id="premTipe" class="form-control" required>
+                                <option value="Basic">Basic (Standard)</option>
+                                <option value="Premium">Premium</option>
+                                <option value="Exclusive">Exclusive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Username Klien</label>
+                            <input type="text" name="prem_username" id="premUsername" class="form-control" placeholder="romeo_juliet" required>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <input type="password" name="prem_password" class="form-control" placeholder="Buat password yang kuat" required>
-                        <span class="text-hint">Min. 6 karakter. Berikan ke klien secara pribadi.</span>
+                        <input type="password" name="prem_password" id="premPassword" class="form-control" placeholder="Isi untuk ubah password">
+                        <span class="text-hint">Kosongkan jika tidak ingin mengubah password.</span>
                     </div>
-                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                    <hr style="margin:20px 0; border:0; border-top:1px dashed #eee;">
+                    <div class="form-group">
+                        <label>Link Folder Undangan</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" name="prem_folder" id="premFolder" class="form-control" placeholder="cth: undangan/premium/yoga-ayu" style="flex:1;">
+                            <button type="button" onclick="generateFolder()" class="btn-action btn-secondary" style="white-space:nowrap; background:#f3f4f6;"><i class="fas fa-magic"></i> Auto</button>
+                        </div>
+                        <span class="text-hint">Folder tempat file <code>index.php</code> undangan berada.</span>
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
                         <button type="button" onclick="closePremModal()" class="btn-action btn-secondary">Batal</button>
                         <button type="submit" name="buat_akun_premium" class="btn-action btn-primary" style="background:#4A5D4E; border:none;">
-                            <i class="fas fa-save"></i> Simpan Akun
+                            <i class="fas fa-save"></i> Simpan Pengaturan
                         </button>
                     </div>
                 </form>
-                <div style="margin-top:15px; padding:12px; background:#fefce8; border-radius:10px; font-size:0.82rem; color:#854d0e;">
-                    <i class="fas fa-info-circle"></i> Link portal klien: <code><?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on'?'https':'http').'://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['PHP_SELF']) ?>/admin_premium/login.php</code>
-                </div>
             </div>
         </div>
         <script>
-        function openPremModal(id, invoice, existingUser, tier) {
+        function openPremModal(id, invoice, existingUser, tier, folder) {
             document.getElementById('premPesananId').value = id;
             document.getElementById('premModalInvoice').textContent = '📄 Invoice: ' + invoice;
             document.getElementById('premUsername').value = existingUser || '';
-            document.getElementById('premTipe').value = tier || 'Premium';
+            document.getElementById('premTipe').value = tier || 'Basic';
+            document.getElementById('premFolder').value = folder || '';
+            document.getElementById('premPassword').required = existingUser ? false : true;
             document.getElementById('modalPremium').style.display = 'flex';
         }
         function closePremModal() {
             document.getElementById('modalPremium').style.display = 'none';
+        }
+
+        function generateFolder() {
+            const pid = document.getElementById('premPesananId').value;
+            if(!pid) return;
+
+            Swal.fire({
+                title: 'Generate Folder?',
+                text: "Sistem akan membuat folder dan menyalin file tema secara otomatis.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#4A5D4E',
+                confirmButtonText: 'Ya, Buat!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const fd = new FormData();
+                    fd.append('action', 'generate_folder');
+                    fd.append('pid', pid);
+
+                    fetch('admin.php?menu=premium', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(d => {
+                        if(d.status === 'ok') {
+                            document.getElementById('premFolder').value = d.path;
+                            Swal.fire('Berhasil!', 'Folder berhasil dibuat: ' + d.path, 'success');
+                        } else {
+                            Swal.fire('Error', d.message, 'error');
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                        Swal.fire('Error', 'Terjadi kesalahan sistem.', 'error');
+                    });
+                }
+            });
         }
         // Auto scroll chat
         const acb = document.getElementById('adminChatBody');

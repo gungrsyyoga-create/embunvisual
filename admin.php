@@ -444,7 +444,12 @@ if(isset($_POST['action']) && $_POST['action'] == 'generate_folder') {
     if(!is_dir("undangan/$tier")) mkdir("undangan/$tier");
     if(!is_dir($target_dir)) mkdir($target_dir, 0777, true);
     
-    $theme_file = "tema/" . $d['slug_demo'];
+    $slug = $d['slug_demo'];
+    if (filter_var($slug, FILTER_VALIDATE_URL)) {
+        $slug = basename(parse_url($slug, PHP_URL_PATH));
+    }
+    $theme_file = "tema/" . $slug;
+    
     if(file_exists($theme_file)) {
         $content = file_get_contents($theme_file);
         // Update the relative path for config/includes
@@ -2280,7 +2285,7 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
             $q_prem_orders = mysqli_query($conn, "
                 SELECT p.id, p.invoice, p.nama_pemesan, p.status_pembayaran, p.status_pengerjaan, p.tanggal_acara,
                        k.nama_tema, a.username as staff_name,
-                       kp.id as kp_id, kp.username as prem_user, kp.is_active as prem_active, kp.tipe as prem_tier
+                       kp.id as kp_id, kp.username as prem_user, kp.is_active as prem_active, kp.tipe as prem_tier, kp.folder_path
                 FROM pesanan p
                 LEFT JOIN katalog_tema k ON p.tema_id = k.id
                 LEFT JOIN admin_users a ON p.admin_id = a.id

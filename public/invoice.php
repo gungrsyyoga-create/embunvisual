@@ -1,5 +1,5 @@
 <?php
-include 'config.php';
+require_once __DIR__ . '/../config/bootstrap.php';
 
 // Ambil nomor invoice dari URL
 if (!isset($_GET['inv'])) {

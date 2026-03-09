@@ -1,6 +1,6 @@
 <?php
 // admin_premium/index.php - Premium Client Dashboard
-include '../config.php';
+require_once __DIR__ . '/../config/bootstrap.php';
 
 // Auth guard
 if (!isset($_SESSION['klien_premium_id'])) {

@@ -32,6 +32,7 @@ if(isset($_POST['login'])) {
         $_SESSION['admin_id'] = $row_admin['id'];
         $_SESSION['admin_username'] = $row_admin['username'];
         $_SESSION['admin_role'] = $row_admin['role'];
+        $_SESSION['role'] = $row_admin['role']; // Consistent with bootstrap.php has_role()
         header("Location: ../admin.php");
         exit;
     } else {

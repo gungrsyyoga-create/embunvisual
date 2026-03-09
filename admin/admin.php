@@ -1,34 +1,38 @@
-<?php 
-// Setting Session Timeout (24 Jam)
-ini_set('session.gc_maxlifetime', 86400);
-session_set_cookie_params(86400);
-
-error_reporting(0);
-session_start();
-include 'config.php'; 
-
-// ==========================================
-// 1. SISTEM AUTENTIKASI (LOGIN & LOGOUT)
-// ==========================================
-// Jika belum login, tendang ke login.php
-if(!isset($_SESSION['admin_embun'])) {
-    header("Location: login.php");
-    exit;
+<?php
+// 1. INITIALIZATION & SECURITY
+global $conn;
+if (!isset($conn)) {
+    require_once dirname(__DIR__) . '/config/bootstrap.php';
 }
+
+// Get current menu earlier to avoid warnings
+$menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
 
 // Timeout session idle PHP (15 menit = 900 detik)
 $timeout_duration = 900;
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout_duration) {
     session_unset();
     session_destroy();
-    header("Location: login.php?msg=timeout");
+    
+    // Robustly find project root URI
+    $current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+    $base_uri = preg_replace('/\/admin$/i', '', rtrim($current_dir, '/'));
+    $redir_path = ($base_uri ?: '') . '/public/login.php';
+    
+    header("Location: $redir_path?msg=timeout");
     exit;
 }
 $_SESSION['last_activity'] = time();
 
 if(isset($_GET['logout'])) {
     session_destroy();
-    header("Location: login.php");
+    
+    // Robustly find project root URI
+    $current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+    $base_uri = preg_replace('/\/admin$/i', '', rtrim($current_dir, '/'));
+    $redir_path = ($base_uri ?: '') . '/public/login.php';
+    
+    header("Location: $redir_path");
     exit;
 }
 
@@ -46,17 +50,9 @@ $current_admin = isset($_SESSION['admin_username']) ? $_SESSION['admin_username'
 $current_role  = isset($_SESSION['admin_role'])    ? $_SESSION['admin_role']    : 'Super Admin';
 $my_id         = isset($_SESSION['admin_id'])      ? $_SESSION['admin_id']      : 1;
 
-// Update Helper: Catat history ke Log
-function catatLog($conn, $admin_id, $action, $target, $keterangan, $foto = null) {
-    $action = mysqli_real_escape_string($conn, $action);
-    $target = mysqli_real_escape_string($conn, $target);
-    $ket = mysqli_real_escape_string($conn, $keterangan);
-    mysqli_query($conn, "INSERT INTO audit_logs (admin_id, action_type, target_id, keterangan, screenshot_path) VALUES ('$admin_id', '$action', '$target', '$ket', '$foto')");
-}
+// Update Helper: History logging now handled by includes/functions.php
 
-// ==========================================
-// HANDLER DOWNLOAD FILE TEMPLATE
-// ==========================================
+// Handler for Download File Template
 if(isset($_GET['dl']) && $menu == 'template') {
     $rel_file = trim($_GET['dl'], '/\\');
 
@@ -114,11 +110,13 @@ if(isset($_POST['update_status_pesanan'])){
             if($status_baru === 'Lunas') {
                 $dp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id = k.id WHERE p.id='$id_pesanan'"));
                 if(!empty($dp['email_pemesan'])) {
-                    require_once __DIR__ . '/includes/mailer.php';
+
                     $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http');
                     $host = $_SERVER['HTTP_HOST'];
-                    $dir = str_replace('\\', '/', dirname($_SERVER['PHP_SELF']));
-                    $checkout_url = "$protocol://$host" . rtrim($dir, '/') . "/invoice.php?inv=" . urlencode($dp['invoice']);
+                    // Get project root by removing "/admin" from the current depth
+                    $uri = str_replace('\\', '/', dirname($_SERVER['PHP_SELF']));
+                    $root_uri = preg_replace('/\/admin\/?$/i', '', rtrim($uri, '/'));
+                    $checkout_url = "$protocol://$host" . $root_uri . "/public/invoice.php?inv=" . urlencode($dp['invoice']);
                     
                     $body = emailLunas($dp['nama_pemesan'], $dp['invoice'], $dp['nama_tema'] ?? '-', $dp['tanggal_acara'], $dp['total_tagihan'], $checkout_url);
                     $mail_sent = kirimEmail($dp['email_pemesan'], $dp['nama_pemesan'], '✅ Pembayaran Dikonfirmasi - Embun Visual', $body);
@@ -191,8 +189,13 @@ if(isset($_POST['verifikasi_tugas'])){
 
         // ── Kirim email notifikasi Proyek Selesai
         if(!empty($dt_lama['email_pemesan'])) {
-            require_once __DIR__ . '/includes/mailer.php';
-            $body = emailSelesai($dt_lama['nama_pemesan'], $dt_lama['invoice'], $dt_lama['nama_tema'] ?? '-');
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http');
+            $host = $_SERVER['HTTP_HOST'];
+            $uri = str_replace('\\', '/', dirname($_SERVER['PHP_SELF']));
+            $root_uri = preg_replace('/\/admin\/?$/i', '', rtrim($uri, '/'));
+            $inv_url = "$protocol://$host" . $root_uri . "/public/invoice.php?inv=" . urlencode($dt_lama['invoice']);
+
+            $body = emailSelesai($dt_lama['nama_pemesan'], $dt_lama['invoice'], $dt_lama['nama_tema'] ?? '-', $inv_url);
             $mail_sent = kirimEmail($dt_lama['email_pemesan'], $dt_lama['nama_pemesan'], '🎉 Undangan Digital Anda Sudah Selesai! - Embun Visual', $body);
             
             if($mail_sent !== true) {
@@ -454,8 +457,8 @@ if(isset($_POST['action']) && $_POST['action'] == 'generate_folder') {
         $content = file_get_contents($theme_file);
         // Update the relative path for config/includes
         $content = str_replace('dirname(__DIR__) . "/config.php"', 'dirname(dirname(dirname(__DIR__))) . "/config.php"', $content);
-        $content = str_replace('../api_rsvp.php', '../../api_rsvp.php', $content);
-        $content = str_replace('../config.php', '../../config.php', $content);
+        $content = str_replace('../api_rsvp.php', '../../../api_rsvp.php', $content);
+        $content = str_replace('../config.php', '../../../config.php', $content);
         
         // Inject original pesanan_id if it's hardcoded (like in the example) or use dynamic
         // For simplicity, we assume the templates use $pesanan_id variable
@@ -505,7 +508,7 @@ if($current_role == 'Super Admin'){
 }
 $badge_notif_tugas = ($jml_tugas > 0) ? "<span style='background:#ef4444; color:white; padding:2px 6px; border-radius:50px; font-size:0.7rem; margin-left:5px;'>$jml_tugas</span>" : "";
 
-$menu = isset($_GET['menu']) ? $_GET['menu'] : 'dashboard';
+// Menu is already initialized at the top
 
 // ==========================================
 // AKSES GUARD: Pesanan Masuk hanya untuk Super Admin
@@ -2244,51 +2247,62 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                 $admin_id = $my_id;
                 
                 // Validasi pesanan exist
-                $q_val = mysqli_query($conn, "SELECT * FROM pesanan p LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pid'");
-                if(mysqli_num_rows($q_val) > 0) {
+                $q_val = mysqli_query($conn, "SELECT p.*, k.slug_demo, kp.id as kp_id FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id=k.id LEFT JOIN klien_premium kp ON kp.pesanan_id=p.id WHERE p.id='$pid'");
+                if($q_val && mysqli_num_rows($q_val) > 0) {
                     $p_data = mysqli_fetch_assoc($q_val);
                     
-                    // Buat struktur folder
+                    // Buat struktur folder (Root level)
                     $nama_klien = strtolower(preg_replace('/[^a-zA-Z0-9]/', '-', $p_data['nama_pemesan']));
-                    $base_dir = __DIR__ . DIRECTORY_SEPARATOR . 'undangan';
+                    $root_dir = dirname(__DIR__);
+                    $base_dir = $root_dir . DIRECTORY_SEPARATOR . 'undangan';
                     $tier_dir = $base_dir . DIRECTORY_SEPARATOR . $tier;
                     $client_dir = $tier_dir . DIRECTORY_SEPARATOR . $nama_klien;
                     
-                    // Create directories
+                    // Create directories in Root
                     if(!is_dir($base_dir)) mkdir($base_dir, 0755, true);
                     if(!is_dir($tier_dir)) mkdir($tier_dir, 0755, true);
                     if(!is_dir($client_dir)) mkdir($client_dir, 0755, true);
                     
-                    // Template mapping (with integrated RSVP forms)
+                    // Template mapping (from Root tema folder)
                     $template_map = [
                         'basic' => 'tema_basic_rsvp.php',
                         'premium' => 'tema_premium_rsvp.php',
                         'exclusive' => 'tema_exclusive_rsvp.php'
                     ];
                     $template_file = $template_map[$tier] ?? 'tema_basic_rsvp.php';
-                    $template_source = __DIR__ . DIRECTORY_SEPARATOR . 'tema' . DIRECTORY_SEPARATOR . $template_file;
+                    $template_source = $root_dir . DIRECTORY_SEPARATOR . 'tema' . DIRECTORY_SEPARATOR . $template_file;
                     $index_dest = $client_dir . DIRECTORY_SEPARATOR . 'index.php';
                     
                     if(file_exists($template_source)) {
-                        copy($template_source, $index_dest);
+                        $content = file_get_contents($template_source);
+                        // Fix relative paths for generated files (3 levels deep: undangan/tier/client)
+                        $content = str_replace('dirname(__DIR__) . "/config.php"', 'dirname(dirname(dirname(__DIR__))) . "/config.php"', $content);
+                        $content = str_replace('../api_rsvp.php', '../../../api_rsvp.php', $content);
+                        $content = str_replace('../config.php', '../../../config.php', $content);
+                        
+                        // Inject pesanan_id
+                        $content = preg_replace('/\$pesanan_id = \d+;/', "\$pesanan_id = $pid;", $content);
+                        
+                        file_put_contents($index_dest, $content);
                     }
                     
                     // Update atau create klien_premium
                     $folder_rel = "undangan/$tier/$nama_klien";
                     if($p_data['kp_id']) {
-                        // Update existing
                         mysqli_query($conn, "UPDATE klien_premium SET tipe='$tier', folder_path='$folder_rel' WHERE id='".$p_data['kp_id']."'");
                     } else {
-                        // Create new
                         $uname = 'klien_' . substr(md5(time()), 0, 8);
                         $pass = md5('123456');
                         mysqli_query($conn, "INSERT INTO klien_premium (pesanan_id, username, password, tipe, folder_path, created_by, is_active) 
                         VALUES ('$pid', '$uname', '$pass', '$tier', '$folder_rel', '$admin_id', 1)");
                     }
                     
-                    // Log
-                    $p_data_inv = mysqli_fetch_assoc(mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$pid'"));
-                    catatLog($conn, $admin_id, 'Generate Folder Client', $p_data_inv['invoice'], "Buat folder: $folder_rel (Tier: $tier)");
+                    // Log safely
+                    $q_inv = mysqli_query($conn, "SELECT invoice FROM pesanan WHERE id='$pid'");
+                    if($q_inv && mysqli_num_rows($q_inv) > 0) {
+                        $p_data_inv = mysqli_fetch_assoc($q_inv);
+                        catatLog($conn, $admin_id, 'Generate Folder Client', $p_data_inv['invoice'], "Buat folder: $folder_rel (Tier: $tier)");
+                    }
                     
                     $_SESSION['notif_pesan'] = "Swal.fire('Berhasil!', 'Folder klien berhasil dibuat: $folder_rel', 'success');";
                     header("Location: admin.php?menu=folder_manager"); exit;
@@ -2316,7 +2330,10 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while($f = mysqli_fetch_assoc($q_folder)) { ?>
+                        <?php 
+                        if ($q_folder) {
+                            while($f = mysqli_fetch_assoc($q_folder)) { 
+                        ?>
                         <tr>
                             <td>
                                 <b style="color:var(--primary);"><?= $f['invoice'] ?></b><br>
@@ -2379,7 +2396,12 @@ Merupakan suatu kehormatan apabila Anda berkenan hadir. Terima kasih!</textarea>
                                 </div>
                             </td>
                         </tr>
-                        <?php } ?>
+                        <?php 
+                            }
+                        } else {
+                            echo "<tr><td colspan='6' style='text-align:center; padding:30px; color:var(--muted);'>Gagal mengambil data folder klien.</td></tr>";
+                        }
+                        ?>
                     </tbody>
                 </table>
             </div>

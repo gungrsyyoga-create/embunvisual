@@ -1,5 +1,5 @@
 <?php
-include 'config.php';
+require_once __DIR__ . '/../config/bootstrap.php';
 
 // Ambil nomor invoice dari URL (misal: checkout.php?inv=INV-20240101-123)
 if (!isset($_GET['inv'])) {
@@ -345,7 +345,7 @@ if(isset($_POST['konfirmasi_bayar'])){
             </div>
         </div>
         
-        <a href="index.php" class="back-link" data-aos="fade-in" data-aos-delay="1200" data-aos-offset="0">
+        <a href="../index.php" class="back-link" data-aos="fade-in" data-aos-delay="1200" data-aos-offset="0">
             <i class="fas fa-arrow-left"></i> Kembali ke Beranda
         </a>
     </div>

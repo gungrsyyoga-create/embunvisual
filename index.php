@@ -132,7 +132,7 @@ if(isset($_POST['submit_booking'])){
         
         if(mysqli_query($conn, $query_booking)){
             // Arahkan otomatis ke halaman checkout membawa nomor Invoice
-            header("Location: checkout.php?inv=$invoice");
+            header("Location: public/checkout.php?inv=$invoice");
             exit;
         }
     }
@@ -1120,6 +1120,76 @@ $query_katalog = mysqli_query($conn, "SELECT * FROM katalog_tema ORDER BY id DES
                     </div>
                 </div>
 
+                <!-- Text Customization -->
+                <div style="margin-bottom:22px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:12px;">✍️ Edit Konten</label>
+                    
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:5px;">Nama Mempelai</label>
+                        <input type="text" id="custInpNames" placeholder="Contoh: Yoga & Ayu" 
+                            style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem;"
+                            oninput="setCustText('.hero-names, .couple-names, .title, .names-display', this.value)">
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:5px;">Tanggal Acara</label>
+                        <input type="text" id="custInpDate" placeholder="Contoh: 12 Desember 2026" 
+                            style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem;"
+                            oninput="setCustText('.hero p, .event-date, .date-value, .date-display', this.value)">
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:5px;">Lokasi Acara</label>
+                        <input type="text" id="custInpLoc" placeholder="Contoh: Grand Ballroom, Bali" 
+                            style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem;"
+                            oninput="setCustText('.detail-item p, .location-text, .venue-name, .venue-display', this.value)">
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:5px;">Kata Sambutan</label>
+                        <textarea id="custInpGreeting" placeholder="Tuliskan kata sambutan..." 
+                            style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem; height:60px; resize:none;"
+                            oninput="setCustText('.subtitle, .opening-text, .greeting, .greeting-display', this.value)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Visual Effects -->
+                <div style="margin-bottom:22px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">✨ Efek Visual</label>
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:8px;">Intensitas Overlay (Gelap)</label>
+                        <input type="range" id="custOverlayOpacity" min="0" max="0.9" step="0.1" value="0.4"
+                            oninput="setCustVar('--overlay-opacity', this.value); document.getElementById('ovlLabel').textContent=(this.value*100)+'%';"
+                            style="width:100%; accent-color:#D4AF37;">
+                        <div style="display:flex; justify-content:space-between; margin-top:4px;">
+                            <span style="font-size:0.7rem; color:#666;">Terang</span>
+                            <span id="ovlLabel" style="font-size:0.82rem; color:#D4AF37;">40%</span>
+                            <span style="font-size:0.7rem; color:#666;">Gelap</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Music (Visual Only) -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">🎵 Musik Latar</label>
+                    <select id="custInpMusic" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem;" onchange="Swal.fire({toast:true, position:'top-end', icon:'info', title:'Musik Terpilih', text:this.options[this.selectedIndex].text, showConfirmButton:false, timer:2000})">
+                        <option value="romantic">Romantic Piano (Standard)</option>
+                        <option value="jazz">Smooth Jazz</option>
+                        <option value="instrumental">Acoustic Guitar</option>
+                        <option value="traditional">Traditional Gamelan</option>
+                    </select>
+                </div>
+
+                <!-- Image Customization -->
+                <div style="margin-bottom:22px;">
+                    <label style="font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:#D4AF37; display:block; margin-bottom:10px;">📸 Upload Foto</label>
+                    <div style="position:relative; width:100%; height:80px; border:2px dashed rgba(255,255,255,0.1); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;" onclick="document.getElementById('custInpImg').click()">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:1.5rem; color:#aaa; margin-bottom:5px;"></i>
+                        <span style="font-size:0.7rem; color:#aaa;">Pilih Foto Utama</span>
+                        <input type="file" id="custInpImg" accept="image/*" style="display:none;" onchange="setCustImg('.hero-img, .banner-img, .hero, .bg-photo', this)">
+                    </div>
+                </div>
+
                 <!-- Buttons -->
                 <div style="margin-top:30px; display:flex; flex-direction:column; gap:10px;">
                     <button onclick="resetCustomizer()" style="padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; cursor:pointer; font-size:0.88rem; transition:0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-undo"></i> Reset Default</button>
@@ -1212,6 +1282,38 @@ function setCustVar(varName, value) {
     }
 }
 
+function setCustText(selector, text) {
+    if (!custIframeReady) return;
+    const iframe = document.getElementById('custIframe');
+    try {
+        const doc = iframe.contentDocument;
+        const elements = doc.querySelectorAll(selector);
+        elements.forEach(el => el.textContent = text);
+    } catch(e) {
+        iframe.contentWindow.postMessage({ type: 'setText', selector, text }, '*');
+    }
+}
+
+function setCustImg(selector, input) {
+    if (!custIframeReady || !input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const dataUrl = e.target.result;
+        const iframe = document.getElementById('custIframe');
+        try {
+            const doc = iframe.contentDocument;
+            const elements = doc.querySelectorAll(selector);
+            elements.forEach(el => {
+                if (el.tagName === 'IMG') el.src = dataUrl;
+                else el.style.backgroundImage = `url(${dataUrl})`;
+            });
+        } catch(err) {
+            iframe.contentWindow.postMessage({ type: 'setImg', selector, src: dataUrl }, '*');
+        }
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
 function setCustFont(fontName) {
     // Inject Google Font dynamically then set --font-serif
     const iframe = document.getElementById('custIframe');
@@ -1235,10 +1337,17 @@ function resetCustomizer() {
     setCustVar('--bg-main', '#FFFDFB');
     setCustVar('--bg-card', '#FFFFFF');
     setCustVar('--font-serif', "'Lora', serif");
+    setCustVar('--overlay-opacity', '0.4');
     document.getElementById('custColorPrimary').value = '#C05C47';
     document.getElementById('custColorBg').value = '#FFFDFB';
     document.getElementById('custFontSize').value = '5';
     document.getElementById('fsSizeLabel').textContent = '5rem';
+    document.getElementById('custInpNames').value = '';
+    document.getElementById('custInpDate').value = '';
+    document.getElementById('custInpLoc').value = '';
+    document.getElementById('custInpGreeting').value = '';
+    document.getElementById('custOverlayOpacity').value = '0.4';
+    document.getElementById('ovlLabel').textContent = '40%';
 }
 
 function setDevice(device) {

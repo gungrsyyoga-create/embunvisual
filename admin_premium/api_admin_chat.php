@@ -1,7 +1,7 @@
 <?php
 // admin_premium/api_admin_chat.php
 // AJAX endpoint for ADMIN/STAFF side chat
-include '../config.php';
+require_once __DIR__ . '/../config/bootstrap.php';
 
 if (!isset($_SESSION['admin_id'])) {
     http_response_code(403);

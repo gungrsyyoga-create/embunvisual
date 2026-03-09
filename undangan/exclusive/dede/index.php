@@ -1,87 +1,67 @@
 <?php
 /**
- * EXCLUSIVE INVITATION - Bali Theme dengan E-Ticket Card
- * Features: Welcome Overlay, RSVP + Database, E-Ticket Card
- * Self-contained system dalam folder /undangan/exclusive/dede/
+ * TEMPLATE EXCLUSIVE - VIP dengan Barcode Scanning + RSVP Form
+ * Akses: /undangan/exclusive/{nama-klien}/index.php
  */
-
 session_start();
+include dirname(dirname(dirname(__FILE__))) . '/config.php';
 
-require_once 'config.php';
+$pesanan_id = isset($_GET['pid']) ? (int)$_GET['pid'] : 1;
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'invitation';
 
-// Check if database setup is needed
-if (needs_setup()) {
-    header('Location: setup.php');
-    exit;
-}
+// Ambil data pesanan
+$q = mysqli_query($conn, "SELECT p.*, k.nama_tema FROM pesanan p LEFT JOIN katalog_tema k ON p.tema_id=k.id WHERE p.id='$pesanan_id'");
+$pesanan = mysqli_fetch_assoc($q);
 
-// Get undangan data
-$undangan_id = UNDANGAN_ID;
-$inv_data = get_undangan();
+if (!$pesanan) { die("Pesanan tidak ditemukan."); }
 
-if (!$inv_data) {
-    die("<div style='background: #0a0e27; color: #f44336; font-family: sans-serif; padding: 50px; text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;'><h2>❌ Undangan tidak ditemukan</h2><p><a href='setup.php' style='color: #d4af37;'>Setup database terlebih dahulu</a></p></div>");
-}
+$nama_klien = htmlspecialchars($pesanan['nama_pemesan']);
+$tanggal_acara = date('d M Y H:i', strtotime($pesanan['tanggal_acara']));
+$hari_h = $pesanan['tanggal_acara'];
+$invoice = htmlspecialchars($pesanan['invoice_number']);
+$barcode_value = 'EVL-' . $invoice . '-' . date('YmdHis');
+$rsvp_submitted = false;
 
-// Handle RSVP submission
-$rsvp_status = 'pending';
-$etiket_number = null;
-$barcode_value = null;
-
+// Handle RSVP form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rsvp'])) {
-    $nama_tamu = mysqli_real_escape_string($mysqli, $_POST['nama_tamu']);
-    $no_hp = mysqli_real_escape_string($mysqli, $_POST['no_hp']);
+    $nama_tamu = mysqli_real_escape_string($conn, $_POST['nama_tamu']);
+    $no_hp = mysqli_real_escape_string($conn, $_POST['no_hp']);
     $respon = $_POST['respon'] === 'hadir' ? 'Hadir' : 'Tidak Hadir';
-    $jumlah = (int)($_POST['jumlah_hadir'] ?? 1);
+    $jumlah = (int)$_POST['jumlah_hadir'];
     
-    if (!empty($nama_tamu) && !empty($inv_data)) {
-        // Save to database
-        $insert = "INSERT INTO tamu_undangan (undangan_id, nama_tamu, no_hp, respon, jumlah_tamu, status_etiket)
-                  VALUES ({$inv_data['id']}, '$nama_tamu', '$no_hp', '$respon', $jumlah, 'pending')";
+    if (!empty($nama_tamu)) {
+        $cek = mysqli_query($conn, "SELECT id FROM tamu_undangan WHERE pesanan_id='$pesanan_id' AND nama_tamu='$nama_tamu'");
         
-        if ($mysqli->query($insert)) {
-            $tamu_id = $mysqli->insert_id;
-            
-            // Generate E-Ticket
-            $etiket_number = 'ETK-' . strtoupper(substr(md5($nama_tamu . time()), 0, 10));
-            $barcode_value = 'DEDE-' . date('Ymd') . '-' . str_pad($tamu_id, 5, '0', STR_PAD_LEFT);
-            
-            // Save E-Ticket to database
-            $etiket_insert = "INSERT INTO etiket (tamu_undangan_id, undangan_id, etiket_number, barcode_value, status)
-                             VALUES ($tamu_id, {$inv_data['id']}, '$etiket_number', '$barcode_value', 'generated')";
-            $mysqli->query($etiket_insert);
-            
-            // Update tamu status
-            $mysqli->query("UPDATE tamu_undangan SET etiket_number = '$etiket_number', status_etiket = 'generated', etiket_generated_at = NOW() WHERE id = $tamu_id");
-            
-            $rsvp_status = 'success';
-            
-            // Store in session
-            $_SESSION['rsvp_tamu'] = array(
-                'nama' => $nama_tamu,
-                'status' => $respon,
-                'jumlah' => $jumlah,
-                'etiket_number' => $etiket_number,
-                'barcode_value' => $barcode_value,
-                'no_hp' => $no_hp
-            );
+        if (mysqli_num_rows($cek) > 0) {
+            mysqli_query($conn, "UPDATE tamu_undangan SET status_rsvp='$respon', jumlah_hadir='$jumlah', no_whatsapp='$no_hp' WHERE pesanan_id='$pesanan_id' AND nama_tamu='$nama_tamu'");
+        } else {
+            mysqli_query($conn, "INSERT INTO tamu_undangan (pesanan_id, nama_tamu, no_whatsapp, status_rsvp, jumlah_hadir) VALUES ('$pesanan_id', '$nama_tamu', '$no_hp', '$respon', '$jumlah')");
         }
+        
+        $rsvp_submitted = true;
     }
 }
 
-// Get RSVP statistics
-$stats = $mysqli->query("SELECT 
-    SUM(CASE WHEN respon='Hadir' THEN 1 ELSE 0 END) as hadir_count,
-    SUM(CASE WHEN respon='Tidak Hadir' THEN 1 ELSE 0 END) as tidak_hadir_count
-    FROM tamu_undangan WHERE undangan_id = {$inv_data['id']}");
-$stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_count' => 0];
+// Hitung statistik RSVP
+$hadir_result = mysqli_query($conn, "SELECT COUNT(*) as total FROM tamu_undangan WHERE pesanan_id='$pesanan_id' AND status_rsvp='Hadir'");
+$hadir_count = mysqli_fetch_assoc($hadir_result)['total'];
+
+$tidak_hadir_result = mysqli_query($conn, "SELECT COUNT(*) as total FROM tamu_undangan WHERE pesanan_id='$pesanan_id' AND status_rsvp='Tidak Hadir'");
+$tidak_hadir_count = mysqli_fetch_assoc($tidak_hadir_result)['total'];
+
+// Hitung scan statistik jika ada tabel barcode_scans
+$scan_today = 0;
+$scan_result = @mysqli_query($conn, "SELECT COUNT(*) as total FROM barcode_scans WHERE pesanan_id='$pesanan_id' AND DATE(scan_time)=CURDATE()");
+if ($scan_result) {
+    $scan_today = mysqli_fetch_assoc($scan_result)['total'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dede & Prasetya - Undangan Pernikahan Eksklusif Bali</title>
+    <title><?= htmlspecialchars($pesanan['nama_pemesan']) ?> - Undangan VIP</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
@@ -94,200 +74,143 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             padding: 20px;
         }
         
-        /* WELCOME OVERLAY */
-        #welcome-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
+        .container {
+            max-width: 750px;
+            margin: 0 auto;
+            background: #1a1f3a;
+            border-radius: 25px;
+            overflow: hidden;
+            border: 2px solid #d4af37;
+            box-shadow: 0 30px 60px rgba(212, 175, 55, 0.2);
+        }
+        
+        .hero {
+            background: radial-gradient(circle at 50% 50%, #2a3f5f 0%, #0a0e27 100%);
+            padding: 80px 30px;
             text-align: center;
-            padding: 20px;
+            position: relative;
+            overflow: hidden;
         }
         
-        #welcome-overlay.hidden {
-            display: none;
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 400px;
+            height: 400px;
+            background: rgba(212, 175, 55, 0.05);
+            border-radius: 50%;
         }
         
-        .welcome-content {
-            animation: slideUp 0.8s ease-out;
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .welcome-badge {
+        .vip-badge {
             display: inline-block;
             background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
             color: #0a0e27;
-            padding: 10px 25px;
+            padding: 8px 20px;
             border-radius: 50px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 700;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             text-transform: uppercase;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
         }
         
-        .welcome-title {
+        .hero h1 {
             font-family: 'Playfair Display', serif;
-            font-size: 4rem;
+            font-size: 3.5rem;
             background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             font-style: italic;
             margin-bottom: 15px;
-            line-height: 1.1;
-        }
-        
-        .welcome-subtitle {
-            color: #b5a0ff;
-            font-size: 1.3rem;
-            margin-bottom: 10px;
-            font-style: italic;
-        }
-        
-        .guest-name-input {
-            margin: 30px 0;
-            display: flex;
-            gap: 10px;
-            max-width: 500px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .guest-name-input input {
-            flex: 1;
-            padding: 12px 20px;
-            border: 2px solid #d4af37;
-            background: rgba(255, 255, 255, 0.05);
-            color: #e0e0e0;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-        
-        .guest-name-input input:focus {
-            outline: none;
-            border-color: #f0e68c;
-            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
-        }
-        
-        .guest-name-input input::placeholder {
-            color: #888;
-        }
-        
-        .btn-open-invitation {
-            background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
-            color: #0a0e27;
-            border: none;
-            padding: 14px 40px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-top: 20px;
-        }
-        
-        .btn-open-invitation:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4);
-        }
-        
-        .welcome-location {
-            color: #d4af37;
-            font-size: 1rem;
-            margin-top: 20px;
-            letter-spacing: 1px;
-        }
-        
-        .welcome-decoration {
-            font-size: 3rem;
-            margin: 30px 0;
-            opacity: 0.8;
-        }
-        
-        /* MAIN CONTAINER */
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: #1a1f3a;
-            border-radius: 25px;
-            overflow: hidden;
-            border: 2px solid #d4af37;
-            box-shadow: 0 30px 80px rgba(212, 175, 55, 0.25);
-        }
-        
-        .hero {
-            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(255, 193, 7, 0.1) 50%, rgba(212, 175, 55, 0.05) 100%);
-            padding: 60px 30px;
-            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
             position: relative;
+            z-index: 1;
         }
         
-        .hero h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: 3.2rem;
-            background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-style: italic;
-            margin-bottom: 10px;
-            line-height: 1.1;
+        .hero p {
+            font-size: 1.1rem;
+            color: #b5a0ff;
+            position: relative;
+            z-index: 1;
         }
         
         .content {
             padding: 50px 30px;
         }
         
+        .title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #b5a0ff;
+            margin-bottom: 40px;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
+        }
+        
         .mode-tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 30px;
-            border-bottom: 1px solid #333;
         }
         
         .mode-tab {
             flex: 1;
             padding: 12px;
-            border: none;
+            border: 1px solid #d4af37;
             background: transparent;
             color: #d4af37;
-            border-bottom: 3px solid transparent;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s;
+            text-decoration: none;
+            display: block;
             text-align: center;
-            font-size: 0.95rem;
         }
         
         .mode-tab.active {
-            border-bottom-color: #d4af37;
-            background: rgba(212, 175, 55, 0.05);
+            background: #d4af37;
+            color: #0a0e27;
+        }
+        
+        .mode-tab:hover {
+            background: rgba(212, 175, 55, 0.1);
+        }
+        
+        .countdown-section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 40px 30px;
+            border-radius: 15px;
+            border: 1px solid #d4af37;
+            margin-bottom: 40px;
+        }
+        
+        .countdown-label {
+            text-align: center;
+            color: #b5a0ff;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .countdown-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
-            margin-bottom: 40px;
         }
         
         .countdown-item {
@@ -301,114 +224,85 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
         .countdown-value {
             font-size: 2rem;
             font-weight: 700;
-            color: #d4af37;
+            background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 5px;
         }
         
-        .countdown-label {
+        .countdown-label-small {
             font-size: 0.8rem;
             color: #b5a0ff;
             text-transform: uppercase;
         }
         
-        .stats-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 40px;
-        }
-        
-        .stat-box {
-            text-align: center;
+        .barcode-section {
             background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid #d4af37;
-        }
-        
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #d4af37;
-        }
-        
-        .stat-label {
-            font-size: 0.8rem;
-            color: #b5a0ff;
-            text-transform: uppercase;
-            margin-top: 5px;
-        }
-        
-        /* E-TIKET CARD STYLE */
-        .etiket-card {
-            background: linear-gradient(135deg, #d4af37 0%, #f0e68c 100%);
-            border-radius: 15px;
-            padding: 40px;
-            color: #0a0e27;
-            margin: 40px 0;
-            box-shadow: 0 20px 50px rgba(212, 175, 55, 0.3);
-            text-align: center;
-            animation: fadeInScale 0.6s ease-out;
-        }
-        
-        @keyframes fadeInScale {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-        
-        .etiket-card h3 {
-            font-size: 1.3rem;
-            margin-bottom: 15px;
-            font-weight: 700;
-        }
-        
-        .etiket-card-box {
-            background: white;
-            border-radius: 10px;
             padding: 30px;
-            margin: 20px 0;
-            border: 2px solid #0a0e27;
+            border-radius: 15px;
+            border: 1px solid #d4af37;
+            margin-bottom: 40px;
+            text-align: center;
         }
         
-        .barcode-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            display: inline-block;
+        .barcode-section h3 {
+            color: #d4af37;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
         }
         
         #barcode {
-            display: block;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: inline-block;
         }
         
-        .etiket-number {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #0a0e27;
-            letter-spacing: 2px;
-            margin-top: 15px;
-        }
-        
-        .etiket-info {
-            margin-top: 15px;
+        .barcode-info {
+            color: #b5a0ff;
             font-size: 0.9rem;
-            color: #0a0e27;
         }
         
-        .etiket-info strong {
-            display: block;
-            margin-top: 10px;
+        .details-section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #d4af37;
+            margin-bottom: 40px;
+        }
+        
+        .detail-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 20px;
+            color: #e0e0e0;
+        }
+        
+        .detail-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .detail-icon {
+            font-size: 1.5rem;
+            min-width: 30px;
+        }
+        
+        .detail-text h3 {
+            font-size: 0.85rem;
+            color: #b5a0ff;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .detail-text p {
             font-size: 1rem;
+            color: #d4af37;
+            font-weight: 600;
         }
         
-        /* RSVP FORM */
         .rsvp-section {
             background: rgba(255, 255, 255, 0.05);
             padding: 30px;
@@ -455,6 +349,10 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
         }
         
+        .form-group input::placeholder {
+            color: #757575;
+        }
+        
         .radio-group {
             display: flex;
             gap: 20px;
@@ -478,6 +376,43 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             color: #b5a0ff;
         }
         
+        .success-message {
+            background: rgba(34, 197, 94, 0.1);
+            border: 2px solid #22c55e;
+            color: #86efac;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .stats-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #d4af37;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #d4af37;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: #b5a0ff;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+        
         .btn {
             padding: 12px 30px;
             border: none;
@@ -486,6 +421,7 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s;
+            text-decoration: none;
             display: inline-block;
             width: 100%;
         }
@@ -500,16 +436,6 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             box-shadow: 0 10px 20px rgba(212, 175, 55, 0.4);
         }
         
-        .success-message {
-            background: rgba(34, 197, 94, 0.1);
-            border: 2px solid #22c55e;
-            color: #86efac;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
         .footer {
             background: #0a0e27;
             padding: 30px;
@@ -519,120 +445,137 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             border-top: 1px solid #d4af37;
         }
         
+        .footer p {
+            margin-bottom: 5px;
+        }
+        
         .hidden { display: none; }
         
         @media (max-width: 480px) {
             .countdown-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
+            
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .title {
+                font-size: 1.8rem;
+            }
+            
             .stats-section {
                 grid-template-columns: 1fr;
-            }
-            .welcome-title {
-                font-size: 2.5rem;
             }
         }
     </style>
 </head>
 <body>
-    <!-- WELCOME OVERLAY -->
-    <div id="welcome-overlay">
-        <div class="welcome-content">
-            <div class="welcome-badge">📬 Undangan Istimewa</div>
-            <div class="welcome-decoration">💍</div>
-            <h1 class="welcome-title">Dede & Prasetya</h1>
-            <p class="welcome-subtitle">Mengundang Anda pada upacara pernikahan mereka</p>
-            
-            <div class="guest-name-input">
-                <input type="text" id="guest-name" placeholder="Siapa nama Anda?" />
-            </div>
-            
-            <button class="btn-open-invitation" onclick="bukaUndangan()">
-                📬 Buka Undangan
-            </button>
-            
-            <p class="welcome-location">🏝️ Bali, Indonesia | 14 Maret 2026</p>
-        </div>
-    </div>
-
-    <!-- MAIN INVITATION -->
-    <div class="container" id="main-invitation" style="display: none;">
+    <div class="container">
         <div class="hero">
-            <h1>Dede & Prasetya</h1>
-            <p style="color: #b5a0ff; font-size: 1.2rem; margin-top: 10px;">✨ Pernikahan Eksklusif di Bali ✨</p>
+            <div class="vip-badge">✨ Exclusive Invitation</div>
+            <h1>Diundang VIP</h1>
+            <p>Acara eksklusif menanti kehadiran Anda</p>
         </div>
         
         <div class="content">
+            <h2 class="title"><?= $nama_klien ?></h2>
+            <p class="subtitle">📅 <?= $tanggal_acara ?></p>
+            
             <div class="mode-tabs">
-                <button class="mode-tab active" onclick="switchMode('undangan')">📬 Undangan</button>
-                <button class="mode-tab" onclick="switchMode('rsvp')">✓ RSVP</button>
-                <button class="mode-tab" onclick="switchMode('etiket')" id="etiket-tab" style="display: none;">📱 E-Tiket</button>
+                <a href="?pid=<?= $pesanan_id ?>&mode=invitation" class="mode-tab <?= $mode === 'invitation' ? 'active' : '' ?>">
+                    📬 Undangan
+                </a>
+                <a href="?pid=<?= $pesanan_id ?>&mode=barcode" class="mode-tab <?= $mode === 'barcode' ? 'active' : '' ?>">
+                    📱 Barcode
+                </a>
+                <a href="?pid=<?= $pesanan_id ?>&mode=rsvp" class="mode-tab <?= $mode === 'rsvp' ? 'active' : '' ?>">
+                    ✓ RSVP
+                </a>
             </div>
             
-            <!-- MODE 1: UNDANGAN -->
-            <div id="mode-undangan" class="mode-content">
-                <p style="text-align: center; color: #b5a0ff; margin-bottom: 30px;">📅 Sabtu, 14 Maret 2026 | 17:00 WIB</p>
-                
-                <div class="countdown-grid">
-                    <div class="countdown-item">
-                        <div class="countdown-value" id="days">0</div>
-                        <div class="countdown-label">Hari</div>
-                    </div>
-                    <div class="countdown-item">
-                        <div class="countdown-value" id="hours">0</div>
-                        <div class="countdown-label">Jam</div>
-                    </div>
-                    <div class="countdown-item">
-                        <div class="countdown-value" id="minutes">0</div>
-                        <div class="countdown-label">Menit</div>
-                    </div>
-                    <div class="countdown-item">
-                        <div class="countdown-value" id="seconds">0</div>
-                        <div class="countdown-label">Detik</div>
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255, 255, 255, 0.05); padding: 30px; border-radius: 15px; border: 1px solid #d4af37; margin-bottom: 30px;">
-                    <div style="margin-bottom: 20px; display: flex; gap: 15px;">
-                        <div style="font-size: 1.5rem;">📍</div>
-                        <div>
-                            <h3 style="color: #b5a0ff; font-size: 0.9rem; margin-bottom: 5px; text-transform: uppercase;">LOKASI</h3>
-                            <p style="color: #d4af37; font-size: 1.1rem; font-weight: 600;">Tirtha Cafe Uluwatu, Bali</p>
+            <!-- INVITATION MODE -->
+            <div class="<?= $mode !== 'invitation' ? 'hidden' : '' ?>">
+                <div class="countdown-section">
+                    <div class="countdown-label">⏳ Hitung Mundur Acara</div>
+                    <div class="countdown-grid">
+                        <div class="countdown-item">
+                            <div class="countdown-value" id="days">0</div>
+                            <div class="countdown-label-small">Hari</div>
                         </div>
-                    </div>
-                    <div style="margin-bottom: 20px; display: flex; gap: 15px;">
-                        <div style="font-size: 1.5rem;">👗</div>
-                        <div>
-                            <h3 style="color: #b5a0ff; font-size: 0.9rem; margin-bottom: 5px; text-transform: uppercase;">DRESS CODE</h3>
-                            <p style="color: #d4af37; font-size: 1.1rem; font-weight: 600;">Formal / Tradisional Bali</p>
+                        <div class="countdown-item">
+                            <div class="countdown-value" id="hours">0</div>
+                            <div class="countdown-label-small">Jam</div>
                         </div>
-                    </div>
-                    <div style="display: flex; gap: 15px;">
-                        <div style="font-size: 1.5rem;">🎫</div>
-                        <div>
-                            <h3 style="color: #b5a0ff; font-size: 0.9rem; margin-bottom: 5px; text-transform: uppercase;">INVOICE</h3>
-                            <p style="color: #d4af37; font-size: 1.1rem; font-weight: 600;"><?php echo $inv_data['invoice_number']; ?></p>
+                        <div class="countdown-item">
+                            <div class="countdown-value" id="minutes">0</div>
+                            <div class="countdown-label-small">Menit</div>
+                        </div>
+                        <div class="countdown-item">
+                            <div class="countdown-value" id="seconds">0</div>
+                            <div class="countdown-label-small">Detik</div>
                         </div>
                     </div>
                 </div>
                 
-                <div style="background: rgba(212, 175, 55, 0.08); padding: 30px; border-radius: 15px; border: 1px solid #d4af37;">
-                    <h3 style="color: #d4af37; margin-bottom: 15px; font-size: 1.1rem;">🎊 ACARA SPESIAL</h3>
-                    <div style="color: #e0e0e0; line-height: 1.8;">
-                        <p style="margin-bottom: 10px;">✓ Upacara Pernikahan & Resepsi</p>
-                        <p style="margin-bottom: 10px;">✓ Pertunjukan Budaya Bali</p>
-                        <p style="margin-bottom: 10px;">✓ Hidangan Bali Autentik & Internasional</p>
-                        <p>✓ Akomodasi di GH Bali Resort</p>
+                <div class="details-section">
+                    <div class="detail-item">
+                        <div class="detail-icon">📅</div>
+                        <div class="detail-text">
+                            <h3>Tanggal & Jam</h3>
+                            <p><?= $tanggal_acara ?></p>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">📍</div>
+                        <div class="detail-text">
+                            <h3>Lokasi</h3>
+                            <p><?= htmlspecialchars($pesanan['lokasi'] ?? 'Lokasi akan dikirim') ?></p>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🎟️</div>
+                        <div class="detail-text">
+                            <h3>Invoice</h3>
+                            <p><?= $invoice ?></p>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <!-- MODE 2: RSVP FORM -->
-            <div id="mode-rsvp" class="mode-content hidden">
-                <?php if ($rsvp_status === 'success'): ?>
-                    <div class="success-message">
-                        ✓ Terima kasih! Respons Anda telah diterima. Silakan lihat E-Tiket Anda di tab berikutnya.
+            <!-- BARCODE MODE -->
+            <div class="<?= $mode !== 'barcode' ? 'hidden' : '' ?>">
+                <div class="barcode-section">
+                    <h3>🎫 Barcode Undangan</h3>
+                    <svg id="barcode"></svg>
+                    <div class="barcode-info">
+                        <p style="margin-bottom: 10px;">Tunjukkan barcode ini saat datang ke acara</p>
+                        <p><strong><?= $barcode_value ?></strong></p>
                     </div>
+                </div>
+                
+                <div class="stats-section">
+                    <div class="stat-box">
+                        <div class="stat-number"><?= $hadir_count ?></div>
+                        <div class="stat-label">Hadir</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number"><?= $tidak_hadir_count ?></div>
+                        <div class="stat-label">Tidak Hadir</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number"><?= $scan_today ?></div>
+                        <div class="stat-label">Scan Hari Ini</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- RSVP MODE -->
+            <div class="<?= $mode !== 'rsvp' ? 'hidden' : '' ?>">
+                <?php if ($rsvp_submitted): ?>
+                <div class="success-message">
+                    ✓ <strong>Terima kasih!</strong> Respons Anda telah tersimpan dengan baik.
+                </div>
                 <?php endif; ?>
                 
                 <div class="rsvp-section">
@@ -640,131 +583,68 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
                     
                     <div class="stats-section">
                         <div class="stat-box">
-                            <div class="stat-number"><?php echo $stat_data['hadir_count'] ?: 0; ?></div>
-                            <div class="stat-label">Akan Hadir</div>
+                            <div class="stat-number"><?= $hadir_count ?></div>
+                            <div class="stat-label">Hadir</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number"><?php echo $stat_data['tidak_hadir_count'] ?: 0; ?></div>
-                            <div class="stat-label">Tidak Dapat</div>
+                            <div class="stat-number"><?= $tidak_hadir_count ?></div>
+                            <div class="stat-label">Tidak Hadir</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number"><?php echo ($stat_data['hadir_count'] ?: 0) + ($stat_data['tidak_hadir_count'] ?: 0); ?></div>
-                            <div class="stat-label">Total</div>
+                            <div class="stat-number"><?= ($hadir_count + $tidak_hadir_count) ?></div>
+                            <div class="stat-label">Total Respons</div>
                         </div>
                     </div>
                     
                     <form method="POST">
                         <div class="form-group">
-                            <label>Nama Lengkap *</label>
-                            <input type="text" name="nama_tamu" placeholder="Masukkan nama Anda..." required>
+                            <label>Nama Anda *</label>
+                            <input type="text" name="nama_tamu" placeholder="Masukkan nama lengkap..." required>
                         </div>
                         
                         <div class="form-group">
-                            <label>Nomor WhatsApp (Opsional)</label>
-                            <input type="tel" name="no_hp" placeholder="Contoh: 62812345678">
+                            <label>Nomor WhatsApp</label>
+                            <input type="tel" name="no_hp" placeholder="Misal: 62812345678">
                         </div>
                         
                         <div class="form-group">
-                            <label>Konfirmasi Kehadiran *</label>
+                            <label>Status Kehadiran *</label>
                             <div class="radio-group">
                                 <div class="radio-item">
-                                    <input type="radio" id="hadir" name="respon" value="hadir" checked>
-                                    <label for="hadir">✓ Saya Akan Hadir</label>
+                                    <input type="radio" id="hadir" name="respon" value="hadir" checked="">
+                                    <label for="hadir">✓ Saya Hadir</label>
                                 </div>
                                 <div class="radio-item">
                                     <input type="radio" id="tidak_hadir" name="respon" value="tidak_hadir">
-                                    <label for="tidak_hadir">✗ Saya Tidak Dapat</label>
+                                    <label for="tidak_hadir">✗ Tidak Hadir</label>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="form-group" id="jumlah_group">
-                            <label>Jumlah Tamu</label>
+                            <label>Jumlah Tamu yang Hadir</label>
                             <input type="number" name="jumlah_hadir" value="1" min="1" max="10">
                         </div>
                         
                         <button type="submit" name="submit_rsvp" class="btn btn-primary">
-                            ✓ Kirim RSVP & Dapatkan E-Tiket
+                            Kirim Respons
                         </button>
                     </form>
                 </div>
             </div>
-            
-            <!-- MODE 3: E-TIKET CARD -->
-            <div id="mode-etiket" class="mode-content hidden">
-                <?php if (isset($_SESSION['rsvp_tamu'])): ?>
-                    <div class="etiket-card">
-                        <h3>🎫 TIKET MASUK EKSKLUSIF</h3>
-                        
-                        <div class="etiket-card-box">
-                            <p style="font-size: 1.2rem; font-weight: 700; margin-bottom: 15px;">
-                                <?php echo $_SESSION['rsvp_tamu']['nama']; ?>
-                            </p>
-                            
-                            <div class="barcode-container">
-                                <svg id="barcode"></svg>
-                            </div>
-                            
-                            <div class="etiket-number">
-                                <?php echo $_SESSION['rsvp_tamu']['etiket_number']; ?>
-                            </div>
-                            
-                            <div class="etiket-info">
-                                <strong>Status Kehadiran:</strong> <?php echo $_SESSION['rsvp_tamu']['status']; ?>
-                                <strong>Jumlah Tamu: <?php echo $_SESSION['rsvp_tamu']['jumlah']; ?> Orang</strong>
-                                <strong style="margin-top: 15px; font-size: 0.85rem; color: #666;">Tunjukkan barcode ini saat check-in</strong>
-                            </div>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <div style="text-align: center; padding: 40px; color: #b5a0ff;">
-                        <p style="font-size: 1.1rem;">📭 E-Tiket belum tersedia</p>
-                        <p style="margin-top: 10px;">Silakan isi form RSVP terlebih dahulu untuk mendapatkan E-Tiket Anda</p>
-                    </div>
-                <?php endif; ?>
-            </div>
         </div>
         
         <div class="footer">
-            <p><strong>💍 Dede & Prasetya 💍</strong></p>
-            <p>Pernikahan Eksklusif | 14 Maret 2026 | Bali</p>
-            <p style="margin-top: 15px; opacity: 0.7;">Powered by Embun Visual</p>
+            <p><strong>Undangan Digital VIP</strong></p>
+            <p>Dengan Barcode Scanning & RSVP Tracking</p>
+            <p>© 2026 - Embun Visual - Semua Hak Dilindungi</p>
         </div>
     </div>
-
+    
     <script>
-        function bukaUndangan() {
-            const guestName = document.getElementById('guest-name').value.trim();
-            if (!guestName) {
-                alert('Silakan masukkan nama Anda terlebih dahulu');
-                return;
-            }
-            document.getElementById('welcome-overlay').style.display = 'none';
-            document.getElementById('main-invitation').style.display = 'block';
-            sessionStorage.setItem('guest-name', guestName);
-            updateCountdown();
-            setInterval(updateCountdown, 1000);
-        }
-        
-        function switchMode(mode) {
-            document.querySelectorAll('.mode-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.mode-tab').forEach(el => el.classList.remove('active'));
-            
-            if (mode === 'undangan') {
-                document.getElementById('mode-undangan').classList.remove('hidden');
-                document.querySelectorAll('.mode-tab')[0].classList.add('active');
-            } else if (mode === 'rsvp') {
-                document.getElementById('mode-rsvp').classList.remove('hidden');
-                document.querySelectorAll('.mode-tab')[1].classList.add('active');
-            } else if (mode === 'etiket') {
-                document.getElementById('mode-etiket').classList.remove('hidden');
-                document.querySelectorAll('.mode-tab')[2].classList.add('active');
-                generateBarcode();
-            }
-        }
-        
+        // Countdown
         function updateCountdown() {
-            const targetDate = new Date('2026-03-14T17:00:00').getTime();
+            const targetDate = new Date('<?= $hari_h ?>').getTime();
             const now = new Date().getTime();
             const remaining = targetDate - now;
             
@@ -776,30 +656,29 @@ $stat_data = $stats ? $stats->fetch_assoc() : ['hadir_count' => 0, 'tidak_hadir_
             }
         }
         
-        function generateBarcode() {
-            <?php if (isset($_SESSION['rsvp_tamu'])): ?>
-                JsBarcode("#barcode", "<?php echo $_SESSION['rsvp_tamu']['barcode_value']; ?>", {
-                    format: "CODE128",
-                    width: 2,
-                    height: 80,
-                    displayValue: false
-                });
-            <?php endif; ?>
-        }
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
         
-        // Toggle jumlah field
-        document.querySelectorAll('input[name="respon"]').forEach(input => {
-            input.addEventListener('change', () => {
-                const jumlahGroup = document.getElementById('jumlah_group');
-                jumlahGroup.style.display = document.getElementById('hadir').checked ? 'block' : 'none';
-            });
+        // Barcode
+        JsBarcode("#barcode", "<?= $barcode_value ?>", {
+            format: "CODE128",
+            width: 2,
+            height: 60,
+            displayValue: false
         });
         
-        // Show E-Tiket tab if RSVP already submitted
-        <?php if ($rsvp_status === 'success'): ?>
-            document.getElementById('etiket-tab').style.display = 'block';
-            switchMode('etiket');
-        <?php endif; ?>
+        // Toggle jumlah hadir
+        const hadir = document.getElementById('hadir');
+        const tidakHadir = document.getElementById('tidak_hadir');
+        const jumlahGroup = document.getElementById('jumlah_group');
+        
+        function toggleJumlah() {
+            jumlahGroup.style.display = hadir.checked ? 'block' : 'none';
+        }
+        
+        hadir.addEventListener('change', toggleJumlah);
+        tidakHadir.addEventListener('change', toggleJumlah);
+        toggleJumlah();
     </script>
 </body>
 </html>

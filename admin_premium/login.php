@@ -1,8 +1,10 @@
 <?php
-// admin_premium/login.php - Client login page
-include '../config.php';
+/**
+ * admin_premium/login.php - Client Portal Entry
+ */
+require_once dirname(__DIR__) . '/config/bootstrap.php';
 
-// Jika sudah login, langsung redirect
+// Auth Guard: Jika sudah login, tendang ke index.php
 if (isset($_SESSION['klien_premium_id'])) {
     header("Location: index.php");
     exit;

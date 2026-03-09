@@ -1,10 +1,6 @@
-<?php 
-// Nyalakan pendeteksi error
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
-include 'config.php'; 
+<?php
+// Load bootstrap dengan struktur baru
+require_once __DIR__ . '/config/bootstrap.php'; 
 
 // ==========================================
 // 0. SISTEM MULTI-BAHASA (LOCALIZATION)

@@ -1,0 +1,25 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /embunvisual/
+
+    # Don't rewrite if it's a real file or directory
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Redirect to index.php - untuk homepage
+    RewriteRule ^$ index.php [L]
+    RewriteRule ^index\.php$ index.php [L]
+
+    # Public pages
+    RewriteRule ^login\.php$ public/login.php [L]
+    RewriteRule ^invoice\.php$ public/invoice.php [L]
+    RewriteRule ^checkout\.php$ public/checkout.php [L]
+
+    # Admin pages - biar mudah diakses
+    RewriteRule ^admin/?$ admin/admin.php [L]
+    RewriteRule ^admin\.php$ admin/admin.php [L]
+
+    # Etiket dashboard
+    RewriteRule ^etiket/?$ admin/admin_etiket_dashboard.php [L]
+    RewriteRule ^etiket\.php$ admin/admin_etiket_dashboard.php [L]
+</IfModule>

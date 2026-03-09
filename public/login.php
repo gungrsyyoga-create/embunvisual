@@ -1,15 +1,14 @@
-<?php 
+<?php
 // Setting Session Timeout (24 Jam)
 ini_set('session.gc_maxlifetime', 86400);
 session_set_cookie_params(86400);
 
-error_reporting(0);
-session_start();
-include 'config.php'; 
+// Load bootstrap dengan struktur baru
+require_once __DIR__ . '/../config/bootstrap.php'; 
 
 // Jika sudah login, tendang ke admin.php
 if(isset($_SESSION['admin_embun'])) {
-    header("Location: admin.php");
+    header("Location: ../admin.php");
     exit;
 }
 
@@ -33,7 +32,7 @@ if(isset($_POST['login'])) {
         $_SESSION['admin_id'] = $row_admin['id'];
         $_SESSION['admin_username'] = $row_admin['username'];
         $_SESSION['admin_role'] = $row_admin['role'];
-        header("Location: admin.php"); 
+        header("Location: ../admin.php");
         exit;
     } else {
         $error_login = "Username atau Password salah!";
